@@ -306,26 +306,35 @@ export class AdminService {
       this.prisma.user.count({ where }),
     ]);
 
-    // Get usage for all users in this batch
-    const userIds = users.map((u) => u.id);
-    const usageData = await this.prisma.query.groupBy({
-      by: ['userId'],
+    // Get usage for all organizations in this batch
+    // Usage is PER ORGANIZATION (not per user) and only counts queries with results
+    const orgIds = [...new Set(users.map((u) => u.memberships[0]?.organization?.id).filter(Boolean))];
+
+    // Count queries WITH results only (consistent with limit enforcement)
+    const orgUsageData = await this.prisma.query.groupBy({
+      by: ['organizationId'],
       where: {
-        userId: { in: userIds },
+        organizationId: { in: orgIds },
         createdAt: { gte: startOfMonth },
+        // Only count queries with actual results (not empty suggestions)
+        NOT: {
+          suggestedCodes: { equals: [] },
+        },
       },
       _count: true,
     });
-    const usageMap = Object.fromEntries(
-      usageData.map((u) => [u.userId, u._count])
+    const orgUsageMap = Object.fromEntries(
+      orgUsageData.map((u) => [u.organizationId, u._count])
     );
 
     // Map users with all data
     let mappedUsers = users.map((u) => {
+      const orgId = u.memberships[0]?.organization?.id;
       const subscription = u.memberships[0]?.organization?.subscription;
       const plan = subscription?.plan || PlanType.FREE;
       const monthlyLimit = subscription?.monthlyQueryLimit || planLimitMap[plan] || 3;
-      const currentUsage = usageMap[u.id] || 0;
+      // Usage is per organization, not per user (and only counts queries with results)
+      const currentUsage = orgId ? (orgUsageMap[orgId] || 0) : 0;
 
       return {
         id: u.id,
