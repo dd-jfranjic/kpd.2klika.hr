@@ -1,0 +1,69 @@
+version: '3.9'
+
+name: kpd-dev
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:17-alpine
+    container_name: kpd-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kpd
+      POSTGRES_PASSWORD: kpd_password
+      POSTGRES_DB: kpd
+    ports:
+      - "13622:5432"
+    volumes:
+      - kpd_postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kpd -d kpd"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kpd-network
+
+  # Redis Cache
+  redis:
+    image: redis:8-alpine
+    container_name: kpd-redis-dev
+    restart: unless-stopped
+    ports:
+      - "13623:6379"
+    volumes:
+      - kpd_redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kpd-network
+
+  # Redis Commander (Dev only - Redis GUI)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: kpd-redis-commander
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "13625:8081"
+    depends_on:
+      - redis
+    networks:
+      - kpd-network
+
+volumes:
+  kpd_postgres_data:
+    name: kpd_postgres_data
+  kpd_redis_data:
+    name: kpd_redis_data
+
+networks:
+  kpd-network:
+    name: kpd-network
+    driver: bridge

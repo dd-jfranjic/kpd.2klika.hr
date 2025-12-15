@@ -1,0 +1,443 @@
+// ===========================================
+// KPD 2klika - Prisma Schema
+// Version: 2.0 (Fresh Start)
+// Date: 2025-12-13
+// ===========================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================
+// CORE MULTI-TENANT MODELS
+// =====================================
+
+model Organization {
+  id                String   @id @default(cuid())
+  name              String   // "Tvrtka d.o.o." ili "Ivan's Workspace"
+  slug              String   @unique // URL-friendly: "tvrtka-doo"
+
+  // Stripe Integration
+  stripeCustomerId  String?  @unique
+
+  // Settings (sve u bazi, nista hardkodirano!)
+  settings          Json     @default("{}")
+
+  // Timestamps
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  members           OrganizationMember[]
+  subscription      Subscription?
+  usageRecords      UsageRecord[]
+  invitations       Invitation[]
+
+  @@index([stripeCustomerId])
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  passwordHash      String
+
+  // Profile
+  firstName         String?
+  lastName          String?
+  avatarUrl         String?
+
+  // Role (za SUPER_ADMIN pristup admin panelu)
+  role              UserRole @default(MEMBER)
+
+  // Status
+  isActive          Boolean  @default(true)
+  emailVerified     Boolean  @default(false)
+  lastLoginAt       DateTime?
+
+  // SECURITY: Account lockout nakon neuspjelih pokušaja
+  failedLoginAttempts Int      @default(0)
+  lockedUntil         DateTime?
+
+  // Timestamps
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  memberships       OrganizationMember[]
+  sentInvitations   Invitation[]
+  auditLogs         AuditLog[]
+  refreshTokens     RefreshToken[]
+
+  @@index([email])
+}
+
+enum UserRole {
+  MEMBER       // Obicni korisnik
+  SUPER_ADMIN  // Master admin - pristup /admin/*
+}
+
+model OrganizationMember {
+  id             String   @id @default(cuid())
+
+  organizationId String
+  userId         String
+
+  role           MemberRole @default(MEMBER)
+  joinedAt       DateTime   @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+}
+
+enum MemberRole {
+  OWNER    // Kreator workspacea - full control
+  ADMIN    // Moze invite/remove membere
+  MEMBER   // Standardni pristup
+}
+
+// =====================================
+// INVITATION SYSTEM
+// =====================================
+
+model Invitation {
+  id             String   @id @default(cuid())
+  email          String
+  token          String   @unique @default(cuid())
+
+  organizationId String
+  invitedById    String
+  role           MemberRole @default(MEMBER)
+
+  status         InvitationStatus @default(PENDING)
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+
+  createdAt      DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy      User         @relation(fields: [invitedById], references: [id])
+
+  @@index([email])
+  @@index([token])
+  @@index([organizationId])
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+}
+
+// =====================================
+// SUBSCRIPTION & BILLING
+// =====================================
+
+model Subscription {
+  id                    String   @id @default(cuid())
+  organizationId        String   @unique
+
+  // Stripe IDs
+  stripeSubscriptionId  String?  @unique
+  stripePriceId         String?
+
+  // Plan Details
+  plan                  PlanType @default(FREE)
+  status                SubscriptionStatus @default(ACTIVE)
+
+  // Billing Cycle
+  currentPeriodStart    DateTime?
+  currentPeriodEnd      DateTime?
+  cancelAtPeriodEnd     Boolean  @default(false)
+
+  // Usage Limits (iz PlanConfig)
+  dailyQueryLimit       Int      @default(5)
+  monthlyQueryLimit     Int?     // null = unlimited
+
+  // Timestamps
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([stripeSubscriptionId])
+  @@index([plan])
+}
+
+enum PlanType {
+  FREE        // KPD Starter: 0€, 3 upita/mjesec
+  BASIC       // KPD Basic: 6.99€, 10 upita/mjesec
+  PRO         // KPD Pro: 11.99€, 20 upita/mjesec
+  BUSINESS    // KPD Business: 30.99€, 50 upita/mjesec
+  ENTERPRISE  // KPD Enterprise: 199€, 2500 upita/mjesec
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  TRIALING
+  PAUSED
+}
+
+// =====================================
+// USAGE TRACKING
+// =====================================
+
+model UsageRecord {
+  id             String   @id @default(cuid())
+  organizationId String
+
+  // Period
+  periodStart    DateTime
+  periodEnd      DateTime
+
+  // Counters
+  queryCount     Int      @default(0)
+  aiQueryCount   Int      @default(0)
+
+  // Reset tracking
+  lastResetAt    DateTime @default(now())
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, periodStart])
+  @@index([organizationId])
+  @@index([periodStart])
+}
+
+// =====================================
+// KPD DATA (Kopirano iz FiskalAI)
+// =====================================
+
+model KpdCategory {
+  id          String   @id
+  name        String
+  description String?
+  level       Int
+  parentId    String?
+  isActive    Boolean  @default(true)
+  version     String   @default("2025")
+
+  parent      KpdCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    KpdCategory[] @relation("CategoryHierarchy")
+  codes       KpdCode[]
+
+  @@index([parentId])
+  @@index([level])
+}
+
+model KpdCode {
+  id          String   @id  // Format: XX.XX.XX
+  name        String   @db.VarChar(500)
+  description String?
+  categoryId  String
+  level       Int
+  parentId    String?
+  fullPath    String?  @db.VarChar(50)
+  codeNumeric Int?     // Za sortiranje: 620111 za "62.01.11"
+  isFinal     Boolean  @default(false)
+  version     String   @default("2025")
+  isActive    Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category    KpdCategory @relation(fields: [categoryId], references: [id])
+  parent      KpdCode?    @relation("CodeHierarchy", fields: [parentId], references: [id])
+  children    KpdCode[]   @relation("CodeHierarchy")
+  queries     Query[]
+
+  @@index([categoryId])
+  @@index([parentId])
+  @@index([level])
+  @@index([isFinal, isActive])
+  @@index([codeNumeric])
+  @@index([name])
+}
+
+// =====================================
+// QUERY HISTORY & ANALYTICS
+// =====================================
+
+model Query {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?
+
+  // Query Details
+  inputText      String
+  suggestedCodes String[] // Array of KPD codes
+  selectedCode   String?  // Kod koji je korisnik odabrao
+
+  // AI Response
+  aiModel        String?
+  confidence     Float?
+  latencyMs      Int?
+  cached         Boolean  @default(false)
+
+  // Context
+  ipAddress      String?
+  userAgent      String?
+
+  createdAt      DateTime @default(now())
+
+  selectedKpd    KpdCode? @relation(fields: [selectedCode], references: [id])
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// =====================================
+// SYSTEM CONFIGURATION (SVE U BAZI!)
+// =====================================
+
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String   @db.Text
+  type        ConfigType @default(STRING)
+  category    String   @default("general")
+  description String?
+  isSecret    Boolean  @default(false) // Encrypted in DB
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+}
+
+enum ConfigType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
+  SECRET  // AES-256 encrypted
+}
+
+model PlanConfig {
+  id                String   @id @default(cuid())
+  plan              PlanType @unique
+
+  // Pricing
+  monthlyPriceEur   Float
+  stripePriceId     String?
+  stripeProductId   String?
+
+  // Limits
+  dailyQueryLimit   Int
+  monthlyQueryLimit Int?     // null = unlimited
+  membersLimit      Int?     // null = unlimited
+
+  // Features (JSON za fleksibilnost)
+  features          Json     @default("[]")
+
+  // Display
+  displayName       String
+  description       String?
+  isPopular         Boolean  @default(false)
+  sortOrder         Int      @default(0)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// =====================================
+// API KEYS (For programmatic access)
+// =====================================
+
+model ApiKey {
+  id             String   @id @default(cuid())
+  organizationId String
+
+  name           String   // User-friendly name: "Production API Key"
+  keyHash        String   // SHA-256 hash of the key (never store plaintext!)
+  keyPrefix      String   // First 8 chars for identification: "kpd_xxxx"
+
+  // Permissions & Status
+  scopes         String[] @default(["classify:read"]) // classify:read, classify:write, etc.
+  isActive       Boolean  @default(true)
+
+  // Usage tracking
+  lastUsedAt     DateTime?
+  usageCount     Int      @default(0)
+
+  // Expiration
+  expiresAt      DateTime?
+
+  // Timestamps
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([keyHash])
+  @@index([keyPrefix])
+}
+
+// =====================================
+// AUDIT LOG (Admin akcije)
+// =====================================
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?  // SUPER_ADMIN koji je napravio akciju
+
+  action      String   // CREATE_USER, UPDATE_PLAN, etc.
+  entityType  String   // User, Organization, etc.
+  entityId    String?
+
+  oldValue    Json?
+  newValue    Json?
+
+  ipAddress   String?
+  userAgent   String?
+
+  createdAt   DateTime @default(now())
+
+  user        User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// =====================================
+// REFRESH TOKENS (SECURITY)
+// =====================================
+
+model RefreshToken {
+  id          String   @id @default(cuid())
+  userId      String
+  tokenHash   String   @unique // SHA-256 hash (never store plaintext!)
+
+  // Device/session info
+  userAgent   String?
+  ipAddress   String?
+
+  // Status
+  isRevoked   Boolean  @default(false)
+  expiresAt   DateTime
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+}

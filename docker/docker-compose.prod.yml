@@ -1,0 +1,176 @@
+version: '3.9'
+
+name: kpd-prod
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:17-alpine
+    container_name: kpd-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kpd}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-kpd}
+    volumes:
+      - kpd_postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kpd} -d ${POSTGRES_DB:-kpd}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kpd-internal
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  # PgBouncer Connection Pooler
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.24.1-p1
+    container_name: kpd-pgbouncer
+    restart: always
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-kpd}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kpd}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 50
+      MIN_POOL_SIZE: 10
+      RESERVE_POOL_SIZE: 10
+      RESERVE_POOL_TIMEOUT: 5
+      SERVER_LIFETIME: 3600
+      SERVER_IDLE_TIMEOUT: 600
+      SERVER_CONNECT_TIMEOUT: 15
+      SERVER_LOGIN_RETRY: 3
+      QUERY_TIMEOUT: 120
+      CLIENT_IDLE_TIMEOUT: 0
+      AUTH_TYPE: scram-sha-256
+      IGNORE_STARTUP_PARAMETERS: search_path,extra_float_digits,options
+    ports:
+      - "13622:5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "localhost", "-p", "5432"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kpd-internal
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: kpd-redis
+    restart: always
+    ports:
+      - "13623:6379"
+    volumes:
+      - kpd_redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kpd-internal
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # NestJS API Backend
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: kpd-api
+    restart: always
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-kpd}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kpd}
+      REDIS_URL: redis://redis:6379
+      PORT: 3000
+    env_file:
+      - ../.env
+    ports:
+      - "13621:3000"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - kpd-internal
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  # Next.js Web Frontend
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api/v1}
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}
+        NEXT_PUBLIC_ADMIN_EMAILS: ${NEXT_PUBLIC_ADMIN_EMAILS}
+    container_name: kpd-web
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    env_file:
+      - ../.env
+    ports:
+      - "13620:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - kpd-internal
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+volumes:
+  kpd_postgres_data:
+    name: kpd_postgres_data
+  kpd_redis_data:
+    name: kpd_redis_data
+
+networks:
+  kpd-internal:
+    name: kpd-internal
+    driver: bridge
+    internal: false

@@ -1,0 +1,40 @@
+{
+  "name": "@kpd/email",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./templates/*": {
+      "types": "./dist/templates/*.d.ts",
+      "default": "./dist/templates/*.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "email dev",
+    "preview": "email preview"
+  },
+  "dependencies": {
+    "@react-email/components": "^1.0.1",
+    "@react-email/render": "^1.0.6",
+    "react": "^19.0.0"
+  },
+  "peerDependencies": {
+    "react-email": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react-email": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}

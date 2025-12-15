@@ -1,0 +1,15 @@
+{
+  "extends": "@kpd/typescript-config/nextjs.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "@kpd/ui": ["../../packages/ui/src"],
+      "@kpd/ui/*": ["../../packages/ui/src/*"],
+      "@kpd/config": ["../../packages/config/src"],
+      "@kpd/config/*": ["../../packages/config/src/*"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules", ".next"]
+}

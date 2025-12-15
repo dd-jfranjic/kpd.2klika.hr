@@ -1,0 +1,48 @@
+# Dependencies (copied from deps stage)
+node_modules
+**/node_modules
+
+# Build artifacts
+**/dist
+**/.turbo
+**/tsconfig.tsbuildinfo
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Environment files (use env_file in docker-compose)
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Test files
+**/*.test.ts
+**/*.spec.ts
+**/test/
+**/tests/
+coverage/
+.nyc_output/
+
+# Docker compose files only (Dockerfiles needed for build context)
+docker-compose*

@@ -1,0 +1,330 @@
+{
+  "metadata": {
+    "version": "2025",
+    "effectiveDate": "2025-01-01",
+    "mandatoryForInvoices": "2026-01-01",
+    "source": "Državni zavod za statistiku Republike Hrvatske",
+    "levels": 6
+  },
+  "categories": [
+    {
+      "code": "A",
+      "name": "PROIZVODI POLJOPRIVREDE, ŠUMARSTVA I RIBARSTVA",
+      "level": 1,
+      "children": [
+        {
+          "code": "01",
+          "name": "Biljni i stočarski proizvodi, proizvodi lovstva i usluge povezane s njima",
+          "level": 2,
+          "parentCode": "A",
+          "children": [
+            {
+              "code": "01.1",
+              "name": "Jednogodišnji usjevi",
+              "level": 3,
+              "parentCode": "01",
+              "children": [
+                {
+                  "code": "01.11",
+                  "name": "Žitarice, osim riže, mahunarke i uljano sjemenje",
+                  "level": 4,
+                  "parentCode": "01.1",
+                  "children": [
+                    {
+                      "code": "01.11.1",
+                      "name": "Pšenica",
+                      "level": 5,
+                      "parentCode": "01.11",
+                      "children": [
+                        {
+                          "code": "A01.11.11",
+                          "name": "Tvrda pšenica",
+                          "level": 6,
+                          "parentCode": "01.11.1"
+                        },
+                        {
+                          "code": "A01.11.12",
+                          "name": "Pšenica, osim tvrde",
+                          "level": 6,
+                          "parentCode": "01.11.1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "K",
+      "name": "TELEKOMUNIKACIJE, RAČUNALNO PROGRAMIRANJE, SAVJETOVANJE I OSTALE INFORMACIJSKE USLUGE",
+      "level": 1,
+      "children": [
+        {
+          "code": "61",
+          "name": "Telekomunikacijske usluge",
+          "level": 2,
+          "parentCode": "K",
+          "children": [
+            {
+              "code": "61.1",
+              "name": "Žičane, bežične i satelitske telekomunikacijske usluge",
+              "level": 3,
+              "parentCode": "61",
+              "children": [
+                {
+                  "code": "61.10",
+                  "name": "Žičane, bežične i satelitske telekomunikacijske usluge",
+                  "level": 4,
+                  "parentCode": "61.1",
+                  "children": [
+                    {
+                      "code": "61.10.1",
+                      "name": "Usluge prijenosa podataka i poruka",
+                      "level": 5,
+                      "parentCode": "61.10",
+                      "children": [
+                        {
+                          "code": "K61.10.11",
+                          "name": "Usluge fiksne telefonije – pristup i uporaba",
+                          "level": 6,
+                          "parentCode": "61.10.1"
+                        },
+                        {
+                          "code": "K61.10.12",
+                          "name": "Usluge fiksne telefonije – mogućnosti pozivanja",
+                          "level": 6,
+                          "parentCode": "61.10.1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "62",
+          "name": "Računalno programiranje, savjetovanje i usluge povezane s njima",
+          "level": 2,
+          "parentCode": "K",
+          "children": [
+            {
+              "code": "62.1",
+              "name": "Usluge računalnog programiranja",
+              "level": 3,
+              "parentCode": "62",
+              "children": [
+                {
+                  "code": "62.10",
+                  "name": "Usluge računalnog programiranja",
+                  "level": 4,
+                  "parentCode": "62.1",
+                  "children": [
+                    {
+                      "code": "62.10.1",
+                      "name": "Usluge izrade i razvoja programske opreme",
+                      "level": 5,
+                      "parentCode": "62.10",
+                      "children": [
+                        {
+                          "code": "K62.10.11",
+                          "name": "Usluge IT dizajna i razvoja aplikacija",
+                          "description": "Dizajn strukture i sadržaja aplikacija, pisanje koda potrebnog za izradu i implementaciju softvera, uključujući web aplikacije, mobilne aplikacije i desktop aplikacije",
+                          "level": 6,
+                          "parentCode": "62.10.1"
+                        },
+                        {
+                          "code": "K62.10.12",
+                          "name": "Usluge IT dizajna i razvoja mreža i sustava",
+                          "description": "Dizajn mrežne arhitekture, razvoj mrežnih aplikacija, implementacija mrežnih rješenja, web servisi i API integracije",
+                          "level": 6,
+                          "parentCode": "62.10.1"
+                        }
+                      ]
+                    },
+                    {
+                      "code": "62.10.2",
+                      "name": "Originalni softver",
+                      "level": 5,
+                      "parentCode": "62.10",
+                      "children": [
+                        {
+                          "code": "K62.10.21",
+                          "name": "Originalni softver za računalne igre",
+                          "level": 6,
+                          "parentCode": "62.10.2"
+                        },
+                        {
+                          "code": "K62.10.22",
+                          "name": "Ostali originalni softver",
+                          "level": 6,
+                          "parentCode": "62.10.2"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "code": "62.2",
+              "name": "Računalno savjetovanje i usluge upravljanja računalnom opremom",
+              "level": 3,
+              "parentCode": "62",
+              "children": [
+                {
+                  "code": "62.20",
+                  "name": "Računalno savjetovanje i usluge upravljanja računalnom opremom",
+                  "level": 4,
+                  "parentCode": "62.2",
+                  "children": [
+                    {
+                      "code": "62.20.1",
+                      "name": "Usluge savjetovanja o hardveru",
+                      "level": 5,
+                      "parentCode": "62.20",
+                      "children": [
+                        {
+                          "code": "K62.20.10",
+                          "name": "Usluge savjetovanja o hardveru",
+                          "level": 6,
+                          "parentCode": "62.20.1"
+                        }
+                      ]
+                    },
+                    {
+                      "code": "62.20.2",
+                      "name": "Usluge savjetovanja o sustavima i softveru",
+                      "level": 5,
+                      "parentCode": "62.20",
+                      "children": [
+                        {
+                          "code": "K62.20.20",
+                          "name": "Usluge savjetovanja o sustavima i softveru",
+                          "level": 6,
+                          "parentCode": "62.20.2"
+                        }
+                      ]
+                    },
+                    {
+                      "code": "62.20.3",
+                      "name": "Usluge tehničke podrške u vezi s računalima",
+                      "level": 5,
+                      "parentCode": "62.20",
+                      "children": [
+                        {
+                          "code": "K62.20.30",
+                          "name": "Usluge tehničke podrške u vezi s računalima",
+                          "level": 6,
+                          "parentCode": "62.20.3"
+                        }
+                      ]
+                    },
+                    {
+                      "code": "62.20.4",
+                      "name": "Usluge upravljanja računalnom opremom i sustavima",
+                      "level": 5,
+                      "parentCode": "62.20",
+                      "children": [
+                        {
+                          "code": "K62.20.41",
+                          "name": "Usluge upravljanja računalnim mrežama",
+                          "level": 6,
+                          "parentCode": "62.20.4"
+                        },
+                        {
+                          "code": "K62.20.42",
+                          "name": "Usluge upravljanja računalnim sustavima",
+                          "level": 6,
+                          "parentCode": "62.20.4"
+                        }
+                      ]
+                    },
+                    {
+                      "code": "62.20.5",
+                      "name": "Usluge savjetovanja o kibernetičkoj sigurnosti",
+                      "level": 5,
+                      "parentCode": "62.20",
+                      "children": [
+                        {
+                          "code": "K62.20.50",
+                          "name": "Usluge savjetovanja o kibernetičkoj sigurnosti",
+                          "level": 6,
+                          "parentCode": "62.20.5"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "code": "63",
+          "name": "Računalna infrastruktura, obrada podataka, usluge poslužitelja i ostale informacijske usluge",
+          "level": 2,
+          "parentCode": "K",
+          "children": [
+            {
+              "code": "63.1",
+              "name": "Računalna infrastruktura, obrada podataka, usluge poslužitelja i povezane usluge",
+              "level": 3,
+              "parentCode": "63",
+              "children": [
+                {
+                  "code": "63.10",
+                  "name": "Obrada podataka, usluge poslužitelja i povezane usluge",
+                  "level": 4,
+                  "parentCode": "63.1",
+                  "children": [
+                    {
+                      "code": "63.10.1",
+                      "name": "Obrada podataka, usluge poslužitelja i ostale usluge povezane s IT infrastrukturom",
+                      "level": 5,
+                      "parentCode": "63.10",
+                      "children": [
+                        {
+                          "code": "K63.10.11",
+                          "name": "Usluge obrade podataka",
+                          "level": 6,
+                          "parentCode": "63.10.1"
+                        },
+                        {
+                          "code": "K63.10.12",
+                          "name": "Usluge internetskog poslužitelja",
+                          "description": "Web hosting usluge, upravljanje web serverima, cloud hosting, shared hosting, VPS hosting",
+                          "level": 6,
+                          "parentCode": "63.10.1"
+                        },
+                        {
+                          "code": "K63.10.13",
+                          "name": "Ostale usluge poslužitelja i ostale usluge povezane s IT infrastrukturom",
+                          "level": 6,
+                          "parentCode": "63.10.1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "searchTerms": {
+    "web": ["K62.10.11", "K62.10.12", "K63.10.12"],
+    "programiranje": ["K62.10.11", "K62.10.12", "K62.10.21", "K62.10.22"],
+    "aplikacija": ["K62.10.11"],
+    "hosting": ["K63.10.12"],
+    "mreža": ["K62.10.12", "K62.20.41"],
+    "sigurnost": ["K62.20.50"]
+  }
+}

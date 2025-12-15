@@ -1,0 +1,375 @@
+import {
+  Injectable,
+  Logger,
+  Inject,
+  ForbiddenException,
+} from '@nestjs/common';
+import { CACHE_MANAGER, Cache } from '@nestjs/cache-manager';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { RagService } from './rag.service';
+import { KpdService } from './kpd.service';
+import { KpdSuggestion, KpdSearchResponse } from '../dto';
+
+interface UsageInfo {
+  remainingQueries: number;
+  monthlyLimit: number;
+  usedThisMonth: number;
+}
+
+/**
+ * KPD Suggestion Service
+ *
+ * Glavna business logika za KPD pretragu:
+ * 1. Provjera usage limita
+ * 2. Cache provjera
+ * 3. RAG upit (Gemini AI)
+ * 4. Validacija rezultata protiv lokalne baze
+ * 5. Logiranje upita
+ */
+@Injectable()
+export class KpdSuggestionService {
+  private readonly logger = new Logger(KpdSuggestionService.name);
+  private readonly CACHE_TTL = 3600000; // 1 sat u ms
+
+  constructor(
+    private prisma: PrismaService,
+    private ragService: RagService,
+    private kpdService: KpdService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+  ) {}
+
+  /**
+   * Dohvati KPD prijedloge za upit
+   */
+  async getSuggestions(
+    query: string,
+    organizationId: string,
+    userId?: string,
+  ): Promise<KpdSearchResponse> {
+    const normalizedQuery = query.toLowerCase().trim();
+    const startTime = Date.now();
+
+    // 1. Provjeri usage limit
+    const usageInfo = await this.checkUsageLimit(organizationId);
+    if (usageInfo.remainingQueries <= 0) {
+      throw new ForbiddenException(
+        'Dnevni limit upita dosegnut. Nadogradite plan za više upita.',
+      );
+    }
+
+    // 2. Provjeri cache
+    const cacheKey = `kpd:query:${normalizedQuery}`;
+    const cached = await this.cacheManager.get<KpdSuggestion[]>(cacheKey);
+
+    if (cached && cached.length > 0) {
+      this.logger.debug(`Cache hit za upit: "${query}"`);
+
+      // Inkrementiraj usage samo ako ima rezultata
+      await this.incrementUsage(organizationId);
+
+      // Logiraj upit (cached)
+      await this.logQuery({
+        query: normalizedQuery,
+        suggestions: cached,
+        organizationId,
+        userId,
+        cached: true,
+        latencyMs: Date.now() - startTime,
+      });
+
+      const newUsageInfo = await this.checkUsageLimit(organizationId);
+
+      return {
+        query,
+        suggestions: cached,
+        cached: true,
+        latencyMs: Date.now() - startTime,
+        remainingQueries: newUsageInfo.remainingQueries,
+      };
+    }
+
+    // 3. Query RAG service
+    this.logger.debug(`RAG query za: "${query}"`);
+    let rawSuggestions: { code: string; name: string; confidence: number }[] =
+      [];
+
+    try {
+      rawSuggestions = await this.ragService.searchKpd(query);
+
+      // Ako RAG vrati prazan rezultat, pokušaj s lokalnom pretragom
+      if (rawSuggestions.length === 0) {
+        this.logger.debug('RAG vratio prazan rezultat, pokušavam lokalnu pretragu...');
+        rawSuggestions = await this.fallbackLocalSearch(normalizedQuery);
+      }
+    } catch (error) {
+      this.logger.error('RAG error:', error);
+      // Fallback na lokalnu pretragu ako RAG nije dostupan
+      rawSuggestions = await this.fallbackLocalSearch(normalizedQuery);
+    }
+
+    // 4. Validiraj protiv lokalne baze
+    const validatedSuggestions = await this.validateSuggestions(rawSuggestions);
+
+    // 5. Cache rezultate (samo ako ima rezultata)
+    if (validatedSuggestions.length > 0) {
+      await this.cacheManager.set(cacheKey, validatedSuggestions, this.CACHE_TTL);
+    }
+
+    // 6. Inkrementiraj usage SAMO ako ima rezultata
+    // Korisnik ne treba "platiti" za neuspješni upit
+    if (validatedSuggestions.length > 0) {
+      await this.incrementUsage(organizationId);
+    }
+
+    const latencyMs = Date.now() - startTime;
+
+    // 7. Logiraj upit (uvijek logiraj za analitiku, bez obzira na rezultat)
+    await this.logQuery({
+      query: normalizedQuery,
+      suggestions: validatedSuggestions,
+      organizationId,
+      userId,
+      cached: false,
+      latencyMs,
+    });
+
+    const newUsageInfo = await this.checkUsageLimit(organizationId);
+
+    return {
+      query,
+      suggestions: validatedSuggestions,
+      cached: false,
+      latencyMs,
+      remainingQueries: newUsageInfo.remainingQueries,
+    };
+  }
+
+  /**
+   * Fallback pretraga ako RAG nije dostupan
+   */
+  private async fallbackLocalSearch(
+    query: string,
+  ): Promise<{ code: string; name: string; confidence: number }[]> {
+    const localResults = await this.kpdService.searchByText(query, {
+      limit: 5,
+      onlyFinal: true,
+    });
+
+    return localResults.map((r, index) => ({
+      code: r.id,
+      name: r.name,
+      confidence: Math.max(0.5, 0.9 - index * 0.1), // Decreasing confidence
+    }));
+  }
+
+  /**
+   * Validiraj AI prijedloge protiv lokalne baze
+   */
+  private async validateSuggestions(
+    suggestions: { code: string; name: string; confidence: number; reason?: string }[],
+  ): Promise<KpdSuggestion[]> {
+    const validated: KpdSuggestion[] = [];
+
+    for (const s of suggestions) {
+      const kpdCode = await this.prisma.kpdCode.findUnique({
+        where: { id: s.code },
+        include: { category: true },
+      });
+
+      if (kpdCode && kpdCode.isActive) {
+        validated.push({
+          code: kpdCode.id,
+          name: kpdCode.name,
+          description: kpdCode.description ?? undefined,
+          confidence: s.confidence,
+          level: kpdCode.level,
+          categoryId: kpdCode.categoryId,
+          isFinal: kpdCode.isFinal,
+          reason: s.reason,
+        });
+      } else {
+        this.logger.debug(`Nevalidna šifra iz AI: ${s.code}`);
+      }
+    }
+
+    return validated;
+  }
+
+  /**
+   * Provjeri usage limit za organizaciju (mjesečni limit)
+   * IZVOR ISTINE: Query tablica (svaki upit se logira)
+   *
+   * BITNO: Broji upite od KASNIJEG datuma između:
+   * - Početak kalendar mjeseca
+   * - currentPeriodStart pretplate (kada je korisnik upgrade-ao)
+   *
+   * Time se osigurava da se usage resetira pri upgrade-u!
+   */
+  private async checkUsageLimit(organizationId: string): Promise<UsageInfo> {
+    // Dohvati organizaciju sa subscription
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      include: {
+        subscription: true,
+      },
+    });
+
+    if (!org) {
+      throw new ForbiddenException('Organizacija nije pronađena');
+    }
+
+    // Mjesečni limit iz subscriptiona ili default (5 za FREE)
+    const monthlyLimit = org.subscription?.monthlyQueryLimit ?? 5;
+
+    // Odredi početak perioda za brojanje upita
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Koristi kasniji datum - ili početak mjeseca ili početak pretplate
+    // Ovo osigurava da se usage resetira kada korisnik upgrade-a plan!
+    const subscriptionStart = org.subscription?.currentPeriodStart ?? monthStart;
+    const countFromDate = subscriptionStart > monthStart ? subscriptionStart : monthStart;
+
+    // Broji SAMO upite koji su imali rezultate (suggestedCodes nije prazan)
+    // Upiti bez rezultata ne troše limit korisnika
+    const usedThisMonth = await this.prisma.query.count({
+      where: {
+        organizationId,
+        createdAt: { gte: countFromDate },
+        NOT: {
+          suggestedCodes: { equals: [] },
+        },
+      },
+    });
+
+    const remainingQueries = Math.max(0, monthlyLimit - usedThisMonth);
+
+    return { remainingQueries, monthlyLimit, usedThisMonth };
+  }
+
+  /**
+   * Inkrementiraj usage counter
+   */
+  private async incrementUsage(organizationId: string): Promise<void> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Pronađi ili kreiraj UsageRecord za danas
+    const existingRecord = await this.prisma.usageRecord.findUnique({
+      where: {
+        organizationId_periodStart: {
+          organizationId,
+          periodStart: today,
+        },
+      },
+    });
+
+    if (existingRecord) {
+      await this.prisma.usageRecord.update({
+        where: { id: existingRecord.id },
+        data: {
+          queryCount: { increment: 1 },
+          aiQueryCount: { increment: 1 },
+        },
+      });
+    } else {
+      await this.prisma.usageRecord.create({
+        data: {
+          organizationId,
+          periodStart: today,
+          periodEnd: tomorrow,
+          queryCount: 1,
+          aiQueryCount: 1,
+        },
+      });
+    }
+  }
+
+  /**
+   * Logiraj upit u Query tablicu
+   */
+  private async logQuery(data: {
+    query: string;
+    suggestions: KpdSuggestion[];
+    organizationId: string;
+    userId?: string;
+    cached: boolean;
+    latencyMs: number;
+  }): Promise<void> {
+    try {
+      // Odaberi prvi prijedlog kao rezultat (ako postoji)
+      const topSuggestion = data.suggestions[0];
+      const suggestedCodes = data.suggestions.map((s) => s.code);
+
+      await this.prisma.query.create({
+        data: {
+          inputText: data.query,
+          suggestedCodes: suggestedCodes,
+          selectedCode: topSuggestion?.code ?? null,
+          confidence: topSuggestion?.confidence ?? null,
+          organizationId: data.organizationId,
+          userId: data.userId ?? null,
+          cached: data.cached,
+          latencyMs: data.latencyMs,
+          aiModel: 'gemini-2.0-flash',
+        },
+      });
+    } catch (error) {
+      // Ne prekidaj flow ako logiranje ne uspije
+      this.logger.error('Greška pri logiranju upita:', error);
+    }
+  }
+
+  /**
+   * Dohvati usage statistike za organizaciju (mjesečno)
+   * Koristi istu logiku kao checkUsageLimit - broji od kasnijeg datuma
+   */
+  async getUsageStats(organizationId: string): Promise<{
+    today: number;
+    thisMonth: number;
+    limit: number;
+    remaining: number;
+    periodStart: Date;
+  }> {
+    // Dohvati organizaciju sa subscription
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      include: { subscription: true },
+    });
+
+    if (!org) {
+      throw new ForbiddenException('Organizacija nije pronađena');
+    }
+
+    // Odredi početak perioda za brojanje (ista logika kao checkUsageLimit)
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const subscriptionStart = org.subscription?.currentPeriodStart ?? monthStart;
+    const countFromDate = subscriptionStart > monthStart ? subscriptionStart : monthStart;
+
+    const usageInfo = await this.checkUsageLimit(organizationId);
+
+    // Današnja potrošnja
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todayRecord = await this.prisma.usageRecord.findFirst({
+      where: {
+        organizationId,
+        periodStart: { gte: today, lt: tomorrow },
+      },
+    });
+
+    return {
+      today: todayRecord?.aiQueryCount ?? 0,
+      thisMonth: usageInfo.usedThisMonth,
+      limit: usageInfo.monthlyLimit,
+      remaining: usageInfo.remainingQueries,
+      periodStart: countFromDate,
+    };
+  }
+}

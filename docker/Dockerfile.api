@@ -1,0 +1,80 @@
+# NestJS API Dockerfile
+# Multi-stage build for production
+
+# ============================================
+# Stage 1: Dependencies & Build
+# ============================================
+FROM node:20-alpine AS builder
+
+RUN apk add --no-cache libc6-compat
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+
+WORKDIR /app
+
+# Copy package files first for better caching
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/api/package.json ./apps/api/
+COPY packages/database/package.json ./packages/database/
+COPY packages/config/package.json ./packages/config/
+COPY packages/ai-providers/package.json ./packages/ai-providers/
+COPY packages/metering/package.json ./packages/metering/
+COPY packages/feature-flags/package.json ./packages/feature-flags/
+COPY packages/typescript-config/package.json ./packages/typescript-config/
+COPY packages/eslint-config/package.json ./packages/eslint-config/
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY . .
+
+# Clean any stale build cache
+RUN find . -name "tsconfig.tsbuildinfo" -delete
+
+# Generate Prisma client
+RUN pnpm --filter @kpd/database db:generate
+
+# Build packages and API
+RUN pnpm --filter @kpd/database build
+RUN pnpm --filter @kpd/config build
+RUN pnpm --filter @kpd/ai-providers build
+RUN pnpm --filter @kpd/metering build
+RUN pnpm --filter @kpd/feature-flags build
+RUN pnpm --filter @kpd/api build
+
+# Deploy API with all dependencies bundled
+RUN pnpm --filter @kpd/api deploy --prod /app/deploy
+
+# ============================================
+# Stage 2: Production
+# ============================================
+FROM node:20-alpine AS runner
+
+RUN apk add --no-cache curl
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=3000
+
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nestjs
+
+# Copy deployed application with all dependencies
+COPY --from=builder /app/deploy/node_modules ./node_modules
+COPY --from=builder /app/deploy/dist ./dist
+COPY --from=builder /app/deploy/package.json ./package.json
+
+# Copy Prisma schema
+COPY --from=builder /app/packages/database/prisma ./prisma
+
+# Copy generated Prisma client to both locations (root and pnpm internal path)
+COPY --from=builder /app/node_modules/.pnpm/@prisma+client@6.19.1_prisma@6.19.1_typescript@5.9.3__typescript@5.9.3/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/.pnpm/@prisma+client@6.19.1_prisma@6.19.1_typescript@5.9.3__typescript@5.9.3/node_modules/.prisma ./node_modules/.pnpm/@prisma+client@6.19.1_prisma@6.19.1_typescript@5.9.3__typescript@5.9.3/node_modules/.prisma
+
+USER nestjs
+
+EXPOSE 3000
+
+CMD ["node", "dist/main.js"]

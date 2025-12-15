@@ -1,0 +1,730 @@
+/* ==========================================================================
+   KPD Login Page - Premium CSS Module
+   Design: Soft Organic (based on FiskalAI design system)
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   CSS Variables - Soft Organic Design System
+   -------------------------------------------------------------------------- */
+.authContainer {
+  --color-cream: #FFFBF5;
+  --color-cream-warm: #FDF8F3;
+  --color-card: #FFFFFF;
+  --color-sage: #6B9B76;
+  --color-sage-light: #8FB996;
+  --color-sage-dark: #4A7A56;
+  --color-sage-bg: #E8F0E8;
+  --color-warm-accent: #D4A574;
+  --color-text-dark: #2D3436;
+  --color-text-medium: #636E72;
+  --color-text-light: #B2BEC3;
+  --color-border: #EDE8E3;
+  --color-success: #27AE60;
+  --color-error: #E74C3C;
+
+  --shadow-soft: 0 2px 8px rgba(45, 52, 54, 0.04);
+  --shadow-medium: 0 8px 24px rgba(45, 52, 54, 0.08);
+  --shadow-large: 0 24px 48px rgba(45, 52, 54, 0.12);
+  --shadow-sage: 0 4px 12px rgba(107, 155, 118, 0.3);
+  --shadow-sage-hover: 0 8px 20px rgba(107, 155, 118, 0.4);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: 'Plus Jakarta Sans', -apple-system, sans-serif;
+
+  --transition-fast: 0.2s ease;
+  --transition-normal: 0.3s ease;
+}
+
+/* --------------------------------------------------------------------------
+   Main Layout - Two Column Split (Optimized for 1920x1080)
+   -------------------------------------------------------------------------- */
+.authContainer {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  min-height: 100vh;
+  background-color: var(--color-cream);
+  font-family: var(--font-body);
+  color: var(--color-text-dark);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+  z-index: 1;
+}
+
+/* --------------------------------------------------------------------------
+   Center Divider - Decentan vizualni element
+   -------------------------------------------------------------------------- */
+.centerDivider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  position: relative;
+  z-index: 2;
+}
+
+.dividerLine {
+  width: 1px;
+  flex: 1;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(107, 155, 118, 0.15) 15%,
+    rgba(107, 155, 118, 0.25) 50%,
+    rgba(107, 155, 118, 0.15) 85%,
+    transparent 100%
+  );
+}
+
+.dividerIcon {
+  width: 48px;
+  height: 48px;
+  background: var(--color-card);
+  border: 1px solid rgba(107, 155, 118, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 12px rgba(107, 155, 118, 0.1);
+}
+
+.dividerIcon svg {
+  width: 24px;
+  height: 24px;
+  stroke: var(--color-sage);
+  stroke-width: 1.5;
+  fill: none;
+}
+
+/* --------------------------------------------------------------------------
+   Background Decoration - Floating Blobs
+   -------------------------------------------------------------------------- */
+.bgDecoration {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.6;
+}
+
+.blob1 {
+  width: 500px;
+  height: 500px;
+  background: linear-gradient(135deg, #E8F0E8, #D4E8D8);
+  top: -10%;
+  left: -5%;
+  animation: float1 20s ease-in-out infinite;
+}
+
+.blob2 {
+  width: 400px;
+  height: 400px;
+  background: linear-gradient(135deg, #FDF0E6, #F5E6D8);
+  bottom: -10%;
+  right: -5%;
+  animation: float2 25s ease-in-out infinite;
+}
+
+.blob3 {
+  width: 300px;
+  height: 300px;
+  background: linear-gradient(135deg, #E8EFF8, #D8E8F0);
+  top: 50%;
+  left: 50%;
+  animation: float3 18s ease-in-out infinite;
+}
+
+@keyframes float1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-30px, 20px) scale(1.05); }
+}
+
+@keyframes float2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(20px, -30px) scale(1.08); }
+}
+
+@keyframes float3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(15px, 15px) scale(0.95); }
+}
+
+/* --------------------------------------------------------------------------
+   Illustration Panel (Left Side) - Optimized for 1920x1080
+   -------------------------------------------------------------------------- */
+.illustrationPanel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 3rem 5rem;
+  position: relative;
+  z-index: 1;
+  max-width: 580px;
+  margin: 0 auto;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(107, 155, 118, 0.06) 0%, transparent 40%),
+    radial-gradient(circle at 70% 80%, rgba(212, 165, 116, 0.05) 0%, transparent 40%);
+}
+
+.brandBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.875rem;
+  background: var(--color-card);
+  border-radius: 100px;
+  box-shadow: var(--shadow-soft);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-medium);
+  width: fit-content;
+  margin-bottom: 1.5rem;
+}
+
+.brandBadgeDot {
+  width: 8px;
+  height: 8px;
+  background: var(--color-sage);
+  border-radius: 50%;
+}
+
+.illustrationTitle {
+  font-family: var(--font-display);
+  font-size: 2.75rem;
+  font-weight: 700;
+  color: var(--color-text-dark);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin-bottom: 1rem;
+}
+
+.illustrationSubtitle {
+  font-size: 1rem;
+  color: var(--color-text-medium);
+  line-height: 1.6;
+  max-width: 400px;
+  margin-bottom: 2rem;
+}
+
+/* Feature Cards */
+.featureCards {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.featureCard {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 1rem;
+  background: var(--color-card);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-soft);
+  transition: all var(--transition-normal);
+  animation: fadeSlideUp 0.5s ease-out both;
+}
+
+.featureCard:nth-child(1) { animation-delay: 0.1s; }
+.featureCard:nth-child(2) { animation-delay: 0.2s; }
+.featureCard:nth-child(3) { animation-delay: 0.3s; }
+
+.featureCard:hover {
+  transform: translateX(8px);
+  box-shadow: var(--shadow-medium);
+}
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.featureIcon {
+  width: 40px;
+  height: 40px;
+  background: var(--color-sage-bg);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.featureIcon svg {
+  width: 20px;
+  height: 20px;
+  stroke: var(--color-sage);
+  stroke-width: 2;
+  fill: none;
+}
+
+.featureContent h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-dark);
+  margin-bottom: 0.125rem;
+}
+
+.featureContent p {
+  font-size: 0.75rem;
+  color: var(--color-text-medium);
+}
+
+/* --------------------------------------------------------------------------
+   Form Panel (Right Side) - Optimized for 1920x1080
+   -------------------------------------------------------------------------- */
+.formPanel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  position: relative;
+  z-index: 1;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(107, 155, 118, 0.04) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, rgba(212, 165, 116, 0.04) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(107, 155, 118, 0.02) 0%, transparent 70%);
+}
+
+.formCard {
+  width: 100%;
+  max-width: 380px;
+  background: var(--color-card);
+  border-radius: var(--radius-xl);
+  padding: 2rem;
+  box-shadow: var(--shadow-large);
+  border: 1px solid rgba(107, 155, 118, 0.15);
+  animation: fadeSlideUp 0.6s ease-out;
+}
+
+/* Logo */
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-bottom: 1.5rem;
+}
+
+.logoIcon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, var(--color-sage), var(--color-sage-light));
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logoIcon svg {
+  width: 22px;
+  height: 22px;
+  fill: white;
+}
+
+.logoText {
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 600;
+  color: var(--color-text-dark);
+}
+
+/* Form Header */
+.formHeader {
+  margin-bottom: 1.5rem;
+}
+
+.formTitle {
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--color-text-dark);
+  letter-spacing: -0.02em;
+  margin-bottom: 0.375rem;
+}
+
+.formSubtitle {
+  font-size: 0.875rem;
+  color: var(--color-text-medium);
+}
+
+/* --------------------------------------------------------------------------
+   Form Elements
+   -------------------------------------------------------------------------- */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-dark);
+}
+
+.inputWrapper {
+  position: relative;
+}
+
+.inputIcon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-light);
+  pointer-events: none;
+  transition: color var(--transition-fast);
+}
+
+.inputIcon svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+}
+
+.input {
+  width: 100%;
+  padding: 0.75rem 1rem 0.75rem 2.75rem;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  color: var(--color-text-dark) !important;
+  background: var(--color-cream-warm) !important;
+  border: 1.5px solid rgba(107, 155, 118, 0.25) !important;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+  /* Disable Tailwind/global ring effects */
+  --tw-ring-inset: initial;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-offset-color: transparent;
+  --tw-ring-color: transparent;
+  --tw-ring-offset-shadow: none;
+  --tw-ring-shadow: none;
+}
+
+.input::placeholder {
+  color: var(--color-text-light) !important;
+}
+
+.input:hover {
+  background: var(--color-cream) !important;
+  border-color: rgba(107, 155, 118, 0.4) !important;
+}
+
+.input:focus {
+  outline: none !important;
+  outline-offset: 0 !important;
+  background: var(--color-card) !important;
+  border-color: var(--color-sage) !important;
+  box-shadow: 0 0 0 3px rgba(107, 155, 118, 0.15) !important;
+  --tw-ring-color: transparent !important;
+  --tw-ring-offset-color: transparent !important;
+  ring: none !important;
+}
+
+.input:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(107, 155, 118, 0.15) !important;
+}
+
+.input:focus + .inputIcon,
+.inputWrapper:focus-within .inputIcon {
+  color: var(--color-sage);
+}
+
+/* Password Toggle */
+.passwordToggle {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-light);
+  padding: 0.25rem;
+  transition: color var(--transition-fast);
+}
+
+.passwordToggle:hover {
+  color: var(--color-text-medium);
+}
+
+.passwordToggle svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+}
+
+/* --------------------------------------------------------------------------
+   Form Options (Remember Me & Forgot Password)
+   -------------------------------------------------------------------------- */
+.formOptions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.25rem;
+}
+
+.checkboxWrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  cursor: pointer;
+}
+
+.checkbox {
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid rgba(107, 155, 118, 0.3);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  background: var(--color-card);
+}
+
+.checkbox.checked {
+  background: var(--color-sage);
+  border-color: var(--color-sage);
+}
+
+.checkbox svg {
+  width: 12px;
+  height: 12px;
+  stroke: white;
+  stroke-width: 3;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all var(--transition-fast);
+}
+
+.checkbox.checked svg {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.checkboxLabel {
+  font-size: 0.875rem;
+  color: var(--color-text-medium);
+}
+
+.forgotPassword {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-sage);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.forgotPassword:hover {
+  color: var(--color-sage-dark);
+}
+
+/* --------------------------------------------------------------------------
+   Buttons
+   -------------------------------------------------------------------------- */
+.btnPrimary {
+  width: 100%;
+  padding: 0.75rem;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, var(--color-sage), var(--color-sage-light));
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  box-shadow: var(--shadow-sage);
+  transition: all var(--transition-normal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.btnPrimary:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sage-hover);
+}
+
+.btnPrimary:active {
+  transform: translateY(0);
+}
+
+.btnPrimary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btnPrimary svg {
+  width: 18px;
+  height: 18px;
+  transition: transform var(--transition-normal);
+}
+
+.btnPrimary:hover svg {
+  transform: translateX(4px);
+}
+
+/* Loading Spinner */
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* --------------------------------------------------------------------------
+   Trust Badges
+   -------------------------------------------------------------------------- */
+.trustBadges {
+  display: flex;
+  justify-content: center;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.trustBadge {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: var(--color-text-light);
+}
+
+.trustBadge svg {
+  width: 14px;
+  height: 14px;
+  stroke: var(--color-sage);
+  stroke-width: 2;
+  fill: none;
+}
+
+/* --------------------------------------------------------------------------
+   Register Link
+   -------------------------------------------------------------------------- */
+.registerLink {
+  text-align: center;
+  margin-top: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--color-text-medium);
+}
+
+.registerLink a {
+  color: var(--color-sage);
+  font-weight: 600;
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.registerLink a:hover {
+  color: var(--color-sage-dark);
+}
+
+/* --------------------------------------------------------------------------
+   Error Message
+   -------------------------------------------------------------------------- */
+.errorMessage {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(231, 76, 60, 0.1);
+  border: 1px solid rgba(231, 76, 60, 0.2);
+  border-radius: var(--radius-sm);
+  color: var(--color-error);
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.errorMessage svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Responsive Design
+   -------------------------------------------------------------------------- */
+@media (max-width: 1024px) {
+  .authContainer {
+    grid-template-columns: 1fr;
+  }
+
+  .illustrationPanel {
+    display: none;
+  }
+
+  .centerDivider {
+    display: none;
+  }
+
+  .formPanel {
+    padding: 2rem 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .formCard {
+    padding: 1.5rem;
+    border-radius: var(--radius-lg);
+  }
+
+  .socialButtons {
+    flex-direction: column;
+  }
+
+  .trustBadges {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .formOptions {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+}
