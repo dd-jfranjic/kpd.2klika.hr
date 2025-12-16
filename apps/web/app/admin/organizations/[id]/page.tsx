@@ -30,7 +30,6 @@ import { PlanBadge, StatusIndicator, UsageProgressBar } from '@/components/admin
 
 interface Member {
   id: string;
-  clerkId: string;
   email: string;
   firstName: string | null;
   lastName: string | null;
@@ -55,7 +54,6 @@ interface OrganizationDetail {
     email: string;
     firstName: string | null;
     lastName: string | null;
-    clerkId: string;
   };
 
   // Members

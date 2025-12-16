@@ -41,6 +41,7 @@ export default function HistoryPage() {
     pages: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
@@ -125,6 +126,79 @@ export default function HistoryPage() {
     return 'kpd-badge--error';
   };
 
+  const handleExportCsv = async () => {
+    if (!token || pagination.total === 0) return;
+
+    setIsExporting(true);
+    try {
+      // Fetch all items for export (up to 1000)
+      const params = new URLSearchParams({
+        page: '1',
+        limit: '1000',
+      });
+      if (searchTerm) {
+        params.append('search', searchTerm);
+      }
+
+      const response = await fetch(`${API_BASE}/queries?${params}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data.items?.length > 0) {
+          const items: QueryHistoryItem[] = data.data.items;
+
+          // Build CSV content
+          const headers = ['Datum', 'Upit', 'KPD Šifra', 'Naziv šifre', 'Pouzdanost (%)'];
+          const csvRows = [
+            headers.join(';'),
+            ...items.map((item) => {
+              const date = new Date(item.createdAt).toLocaleDateString('hr-HR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              });
+              // Escape quotes and wrap in quotes for CSV safety
+              const escapeCsv = (val: string | null) => {
+                if (!val) return '';
+                return `"${val.replace(/"/g, '""')}"`;
+              };
+              return [
+                escapeCsv(date),
+                escapeCsv(item.inputText),
+                item.selectedCode || '',
+                escapeCsv(item.selectedCodeName),
+                item.confidence ? Math.round(item.confidence * 100).toString() : '0',
+              ].join(';');
+            }),
+          ];
+
+          const csvContent = '\uFEFF' + csvRows.join('\n'); // BOM for Excel UTF-8
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+
+          // Create download link
+          const link = document.createElement('a');
+          link.setAttribute('href', url);
+          link.setAttribute('download', `kpd-povijest-${new Date().toISOString().split('T')[0]}.csv`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to export CSV:', error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // Placeholder data for when API is not ready
   const displayQueries = queries.length > 0 ? queries : [];
 
@@ -150,9 +224,18 @@ export default function HistoryPage() {
               <Search className="w-4 h-4" />
               Pretraži
             </button>
-            <button type="button" className="kpd-btn kpd-btn--secondary" disabled>
-              <Download className="w-4 h-4" />
-              Export CSV
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              disabled={isExporting || pagination.total === 0}
+              className="kpd-btn kpd-btn--secondary"
+            >
+              {isExporting ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              {isExporting ? 'Eksportiranje...' : 'Export CSV'}
             </button>
           </form>
         </div>

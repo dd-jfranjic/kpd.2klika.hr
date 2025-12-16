@@ -13,7 +13,7 @@ import {
 
 const logger = pino({ name: 'gemini-provider' });
 
-const DEFAULT_MODEL = 'gemini-1.5-flash';
+const DEFAULT_MODEL = 'gemini-2.5-flash';
 const DEFAULT_MAX_TOKENS = 2048;
 const DEFAULT_TEMPERATURE = 0.1;
 const DEFAULT_TIMEOUT = 30000;

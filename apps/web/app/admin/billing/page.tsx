@@ -241,6 +241,7 @@ function AdminBillingPageContent() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <MetricsCard
                 title="MRR"
+                subtitle="Mjesečni ponavljajući prihod"
                 value={formatCurrency(stats?.mrr || 0)}
                 change={{ value: stats?.mrrGrowth || 0, period: '7d' }}
                 icon={TrendingUp}
@@ -248,12 +249,14 @@ function AdminBillingPageContent() {
               />
               <MetricsCard
                 title="ARR"
+                subtitle="Godišnji prihod (MRR × 12)"
                 value={formatCurrency(stats?.arr || 0)}
                 icon={DollarSign}
                 loading={loading}
               />
               <MetricsCard
                 title="Pretplatnici"
+                subtitle="Aktivne plaćene pretplate"
                 value={stats?.totalSubscribers || 0}
                 change={{ value: stats?.subscribersGrowth || 0, period: '7d' }}
                 icon={Users}
@@ -261,6 +264,7 @@ function AdminBillingPageContent() {
               />
               <MetricsCard
                 title="ARPU"
+                subtitle="Prosječan prihod po korisniku"
                 value={formatCurrency(stats?.averageRevenuePerUser || 0)}
                 icon={CreditCard}
                 loading={loading}
@@ -270,21 +274,23 @@ function AdminBillingPageContent() {
             {/* Secondary Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-semibold text-gray-900">Churn Rate</h3>
                   <ArrowDownRight className="w-4 h-4 text-red-500" />
                 </div>
+                <p className="text-xs text-gray-400 mb-2">Postotak otkazanih pretplata</p>
                 <p className="text-3xl font-bold text-gray-900">
                   {loading ? '-' : `${(stats?.churnRate || 0).toFixed(1)}%`}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">Otkazane pretplate (30d)</p>
+                <p className="text-xs text-gray-500 mt-1">Otkazane pretplate u zadnjih 30 dana</p>
               </div>
 
               <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-semibold text-gray-900">Conversion Rate</h3>
                   <ArrowUpRight className="w-4 h-4 text-green-500" />
                 </div>
+                <p className="text-xs text-gray-400 mb-2">Postotak koji prelaze na plaćeni plan</p>
                 <p className="text-3xl font-bold text-gray-900">
                   {loading ? '-' : `${(stats?.conversionRate || 0).toFixed(1)}%`}
                 </p>
@@ -292,10 +298,11 @@ function AdminBillingPageContent() {
               </div>
 
               <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-semibold text-gray-900">Neplaćene fakture</h3>
                   <AlertTriangle className="w-4 h-4 text-yellow-500" />
                 </div>
+                <p className="text-xs text-gray-400 mb-2">Fakture koje čekaju uplatu</p>
                 <p className="text-3xl font-bold text-gray-900">
                   {loading ? '-' : stats?.unpaidInvoices || 0}
                 </p>

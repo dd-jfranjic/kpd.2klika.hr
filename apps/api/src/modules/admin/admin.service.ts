@@ -24,25 +24,41 @@ export class AdminService {
     const sevenDaysAgo = new Date(today);
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    // User stats
+    // User stats - exclude SUPER_ADMIN users (they are administrative, not real users)
+    const excludeAdminFilter = { role: { not: UserRole.SUPER_ADMIN } };
     const [totalUsers, newUsersToday, newUsers7d] = await Promise.all([
-      this.prisma.user.count({ where: { isActive: true } }),
+      this.prisma.user.count({ where: { isActive: true, ...excludeAdminFilter } }),
       this.prisma.user.count({
-        where: { createdAt: { gte: today } },
+        where: { createdAt: { gte: today }, ...excludeAdminFilter },
       }),
       this.prisma.user.count({
-        where: { createdAt: { gte: sevenDaysAgo } },
+        where: { createdAt: { gte: sevenDaysAgo }, ...excludeAdminFilter },
       }),
     ]);
 
-    // Organization stats
+    // Organization stats - exclude organizations owned by SUPER_ADMIN users
+    const adminOrgIds = await this.prisma.organizationMember.findMany({
+      where: {
+        role: 'OWNER',
+        user: { role: UserRole.SUPER_ADMIN },
+      },
+      select: { organizationId: true },
+    });
+    const excludeAdminOrgIds = adminOrgIds.map(m => m.organizationId);
+    const excludeAdminOrgFilter = excludeAdminOrgIds.length > 0
+      ? { id: { notIn: excludeAdminOrgIds } }
+      : {};
+
     const [totalOrganizations, activeSubscriptions, newOrganizations7d] = await Promise.all([
-      this.prisma.organization.count(),
+      this.prisma.organization.count({ where: excludeAdminOrgFilter }),
       this.prisma.subscription.count({
-        where: { status: SubscriptionStatus.ACTIVE },
+        where: {
+          status: SubscriptionStatus.ACTIVE,
+          ...(excludeAdminOrgIds.length > 0 ? { organizationId: { notIn: excludeAdminOrgIds } } : {}),
+        },
       }),
       this.prisma.organization.count({
-        where: { createdAt: { gte: sevenDaysAgo } },
+        where: { createdAt: { gte: sevenDaysAgo }, ...excludeAdminOrgFilter },
       }),
     ]);
 
@@ -66,9 +82,12 @@ export class AdminService {
     // Cache stats (placeholder - needs Redis integration)
     const cacheHitRate = 75; // TODO: Get from Redis stats
 
-    // Revenue calculation
+    // Revenue calculation - exclude admin organizations
     const allSubscriptions = await this.prisma.subscription.findMany({
-      where: { status: SubscriptionStatus.ACTIVE },
+      where: {
+        status: SubscriptionStatus.ACTIVE,
+        ...(excludeAdminOrgIds.length > 0 ? { organizationId: { notIn: excludeAdminOrgIds } } : {}),
+      },
       include: { organization: true },
     });
 
@@ -111,6 +130,7 @@ export class AdminService {
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
+    // Exclude SUPER_ADMIN users from near limit calculation
     const usersNearLimit = await this.prisma.$queryRaw<{ count: bigint }[]>`
       SELECT COUNT(DISTINCT u.id) as count
       FROM "User" u
@@ -118,7 +138,8 @@ export class AdminService {
       JOIN "Organization" o ON om."organizationId" = o.id
       JOIN "Subscription" s ON o.id = s."organizationId"
       LEFT JOIN "PlanConfig" pc ON s.plan::text = pc.plan::text
-      WHERE (
+      WHERE u.role != 'SUPER_ADMIN'
+      AND (
         SELECT COUNT(*) FROM "Query" q
         WHERE q."userId" = u.id AND q."createdAt" >= ${startOfMonth}
       ) >= COALESCE(s."monthlyQueryLimit", pc."monthlyQueryLimit", 3) * 0.8
@@ -173,6 +194,7 @@ export class AdminService {
       const nextDay = new Date(date);
       nextDay.setDate(nextDay.getDate() + 1);
 
+      // Exclude SUPER_ADMIN users from statistics
       const [queries, users] = await Promise.all([
         this.prisma.query.count({
           where: {
@@ -182,6 +204,7 @@ export class AdminService {
         this.prisma.user.count({
           where: {
             createdAt: { gte: date, lt: nextDay },
+            role: { not: UserRole.SUPER_ADMIN },
           },
         }),
       ]);
@@ -332,7 +355,7 @@ export class AdminService {
       const orgId = u.memberships[0]?.organization?.id;
       const subscription = u.memberships[0]?.organization?.subscription;
       const plan = subscription?.plan || PlanType.FREE;
-      const monthlyLimit = subscription?.monthlyQueryLimit || planLimitMap[plan] || 3;
+      const monthlyLimit = subscription?.monthlyQueryLimit || planLimitMap[plan] || planLimitMap['FREE'] || 0;
       // Usage is per organization, not per user (and only counts queries with results)
       const currentUsage = orgId ? (orgUsageMap[orgId] || 0) : 0;
 
@@ -406,22 +429,36 @@ export class AdminService {
       return null;
     }
 
-    // Get user's queries count
+    // Get organization for usage calculation
+    const organization = user.memberships[0]?.organization;
+
+    // Get usage stats - CRITICAL: Count per ORGANIZATION, not per user!
+    // Only count queries WITH results (consistent with limit enforcement)
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    const [totalQueries, queriesThisMonth] = await Promise.all([
-      this.prisma.query.count({
-        where: { userId: user.id },
-      }),
-      this.prisma.query.count({
-        where: { userId: user.id, createdAt: { gte: startOfMonth } },
-      }),
-    ]);
+    // User's individual stats (for info purposes)
+    const totalQueries = await this.prisma.query.count({
+      where: { userId: user.id },
+    });
 
-    // Get API keys (via organization)
-    const organization = user.memberships[0]?.organization;
+    // ORGANIZATION usage - this is what counts against the limit!
+    const orgUsageThisMonth = organization ? await this.prisma.query.count({
+      where: {
+        organizationId: organization.id,
+        createdAt: { gte: startOfMonth },
+        // Only count queries with actual results (consistent with limit enforcement)
+        NOT: {
+          suggestedCodes: { equals: [] },
+        },
+      },
+    }) : 0;
+
+    // User's contribution to org usage (for stats display)
+    const userQueriesThisMonth = await this.prisma.query.count({
+      where: { userId: user.id, createdAt: { gte: startOfMonth } },
+    });
     const apiKeys = organization ? await this.prisma.apiKey.findMany({
       where: { organizationId: organization.id },
       select: { id: true, name: true, createdAt: true, lastUsedAt: true },
@@ -430,9 +467,17 @@ export class AdminService {
     const membership = user.memberships[0];
     const subscription = organization?.subscription;
 
+    // Dohvati PlanConfig za fallback vrijednosti
+    const planConfig = subscription ? await this.prisma.planConfig.findUnique({
+      where: { plan: subscription.plan },
+    }) : null;
+    const freePlanConfig = !subscription || !planConfig ? await this.prisma.planConfig.findUnique({
+      where: { plan: 'FREE' },
+    }) : null;
+
     // Calculate avg queries per day this month
     const daysInMonth = new Date().getDate();
-    const avgQueriesPerDay = queriesThisMonth / daysInMonth;
+    const avgQueriesPerDay = userQueriesThisMonth / daysInMonth;
 
     return {
       id: user.id,
@@ -459,12 +504,16 @@ export class AdminService {
         stripeSubscriptionId: subscription.stripeSubscriptionId || null,
         currentPeriodStart: subscription.currentPeriodStart?.toISOString() || null,
         currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() || null,
-        monthlyQueryLimit: subscription.monthlyQueryLimit || 25,
-        currentUsage: queriesThisMonth,
+        monthlyQueryLimit: subscription.monthlyQueryLimit || planConfig?.monthlyQueryLimit || freePlanConfig?.monthlyQueryLimit || 0,
+        // CRITICAL: Use ORGANIZATION usage, not user queries!
+        currentUsage: orgUsageThisMonth,
       } : undefined,
       stats: {
         totalQueries,
-        queriesThisMonth,
+        // This is user's individual queries (for info)
+        queriesThisMonth: userQueriesThisMonth,
+        // This is org's usage that counts against limit
+        orgUsageThisMonth: orgUsageThisMonth,
         avgQueriesPerDay: Math.round(avgQueriesPerDay * 10) / 10,
       },
       apiKeys: apiKeys.map(k => ({
@@ -494,6 +543,80 @@ export class AdminService {
       where: { id: userId },
       data: { isActive: !suspended },
     });
+  }
+
+  /**
+   * Reset user's monthly usage - deletes all queries from current month
+   * This gives the user back their full monthly quota
+   */
+  async resetUserUsage(userId: string) {
+    // Get user with organization
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        memberships: {
+          include: {
+            organization: {
+              include: {
+                subscription: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new Error('Korisnik nije pronađen');
+    }
+
+    // Get the user's organization
+    const membership = user.memberships[0];
+    if (!membership?.organization) {
+      throw new Error('Korisnik nije član nijedne organizacije');
+    }
+
+    const organizationId = membership.organization.id;
+
+    // Calculate current month boundaries
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    // Delete all queries for this organization from current month
+    const deletedQueries = await this.prisma.query.deleteMany({
+      where: {
+        organizationId,
+        createdAt: {
+          gte: startOfMonth,
+          lte: endOfMonth,
+        },
+      },
+    });
+
+    // Also delete usage records for current month if they exist
+    await this.prisma.usageRecord.deleteMany({
+      where: {
+        organizationId,
+        createdAt: {
+          gte: startOfMonth,
+          lte: endOfMonth,
+        },
+      },
+    });
+
+    // Get the plan limit for response
+    const planConfig = await this.prisma.planConfig.findUnique({
+      where: { plan: membership.organization.subscription?.plan || 'FREE' },
+    });
+
+    return {
+      message: `Mjesečna potrošnja resetirana za korisnika ${user.email}`,
+      deletedQueries: deletedQueries.count,
+      organizationId,
+      plan: membership.organization.subscription?.plan || 'FREE',
+      newLimit: planConfig?.monthlyQueryLimit ?? planConfig?.dailyQueryLimit ?? 0,
+    };
   }
 
   /**
@@ -715,32 +838,25 @@ export class AdminService {
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    // Get member IDs per organization for usage calculation
-    const memberMap = new Map<string, string[]>();
-    tenants.forEach(t => {
-      memberMap.set(t.id, t.members.map(m => m.userId));
-    });
-
-    // Get usage counts per user
-    const allUserIds = tenants.flatMap(t => t.members.map(m => m.userId));
+    // Get usage counts per organization (only queries with results!)
+    const orgIds = tenants.map(t => t.id);
     const usageData = await this.prisma.query.groupBy({
-      by: ['userId'],
+      by: ['organizationId'],
       where: {
-        userId: { in: allUserIds },
+        organizationId: { in: orgIds },
         createdAt: { gte: startOfMonth },
+        // Only count queries that actually returned results (consumed resources)
+        NOT: { suggestedCodes: { equals: [] } },
       },
       _count: true,
     });
-    const userUsageMap = Object.fromEntries(
-      usageData.map(u => [u.userId, u._count])
-    );
 
-    // Calculate org usage from member usage
+    // Map organizationId to usage count
     const orgUsageMap = new Map<string, number>();
-    tenants.forEach(t => {
-      const memberIds = memberMap.get(t.id) || [];
-      const totalUsage = memberIds.reduce((sum, uid) => sum + (userUsageMap[uid] || 0), 0);
-      orgUsageMap.set(t.id, totalUsage);
+    usageData.forEach(u => {
+      if (u.organizationId) {
+        orgUsageMap.set(u.organizationId, u._count);
+      }
     });
 
     const monthlyQueries = await this.prisma.query.count({
@@ -748,6 +864,12 @@ export class AdminService {
     });
 
     const totalMembers = await this.prisma.organizationMember.count();
+
+    // Dohvati FREE plan za default vrijednosti - jedini izvor istine
+    const freePlan = await this.prisma.planConfig.findUnique({
+      where: { plan: 'FREE' },
+    });
+    const defaultMonthlyLimit = freePlan?.monthlyQueryLimit ?? freePlan?.dailyQueryLimit ?? 0;
 
     return {
       tenants: tenants.map((t) => {
@@ -766,7 +888,7 @@ export class AdminService {
           plan: t.subscription?.plan || 'FREE',
           memberCount: t._count.members,
           monthlyUsage: orgUsageMap.get(t.id) || 0,
-          monthlyLimit: t.subscription?.monthlyQueryLimit ?? 5,
+          monthlyLimit: t.subscription?.monthlyQueryLimit ?? defaultMonthlyLimit,
           status: t.subscription?.status || 'ACTIVE',
           createdAt: t.createdAt.toISOString(),
           owner, // Include owner data
@@ -801,6 +923,7 @@ export class AdminService {
                 role: true,
                 isActive: true,
                 createdAt: true,
+                lastLoginAt: true,
               },
             },
           },
@@ -815,45 +938,118 @@ export class AdminService {
       return null;
     }
 
+    // Find the owner (member with OWNER role)
+    const ownerMember = tenant.members.find(m => m.role === 'OWNER');
+    const owner = ownerMember ? {
+      id: ownerMember.user.id,
+      email: ownerMember.user.email,
+      firstName: ownerMember.user.firstName,
+      lastName: ownerMember.user.lastName,
+    } : null;
+
     // Get usage stats
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
+    // Get queries for this org only (with results)
     const usageThisMonth = await this.prisma.query.count({
       where: {
         organizationId: tenant.id,
         createdAt: { gte: startOfMonth },
+        NOT: {
+          suggestedCodes: { equals: [] },
+        },
       },
     });
+
+    // Get total queries for this org
+    const totalQueries = await this.prisma.query.count({
+      where: { organizationId: tenant.id },
+    });
+
+    // Get active members in last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const activeMembers30d = tenant.members.filter(m =>
+      m.user.lastLoginAt && new Date(m.user.lastLoginAt) >= thirtyDaysAgo
+    ).length;
+
+    // Calculate avg queries per day
+    const daysInMonth = new Date().getDate();
+    const avgQueriesPerDay = usageThisMonth / daysInMonth;
+
+    // Determine if organization is active (based on subscription status)
+    const isActive = !tenant.subscription ||
+      tenant.subscription.status === 'ACTIVE' ||
+      tenant.subscription.status === 'TRIALING';
+
+    // Get plan prices for MRR calculation
+    const planPrices: Record<string, number> = {
+      FREE: 0,
+      BASIC: 9,
+      PRO: 29,
+      BUSINESS: 99,
+      ENTERPRISE: 299,
+    };
+
+    const mrr = planPrices[tenant.subscription?.plan || 'FREE'] || 0;
+
+    // Dohvati PlanConfig za fallback vrijednosti
+    const planConfig = tenant.subscription ? await this.prisma.planConfig.findUnique({
+      where: { plan: tenant.subscription.plan },
+    }) : null;
+    const freePlanConfig = await this.prisma.planConfig.findUnique({
+      where: { plan: 'FREE' },
+    });
+    const defaultMonthlyLimit = freePlanConfig?.monthlyQueryLimit ?? freePlanConfig?.dailyQueryLimit ?? 0;
 
     return {
       id: tenant.id,
       name: tenant.name,
       slug: tenant.slug,
+      isActive,
       createdAt: tenant.createdAt.toISOString(),
+      updatedAt: tenant.updatedAt.toISOString(),
+      owner,
+      members: tenant.members.map(m => ({
+        id: m.user.id,
+        email: m.user.email,
+        firstName: m.user.firstName,
+        lastName: m.user.lastName,
+        role: m.role,
+        isActive: m.user.isActive,
+        joinedAt: m.joinedAt.toISOString(),
+        lastLoginAt: m.user.lastLoginAt?.toISOString() || null,
+      })),
+      memberCount: tenant._count.members,
       subscription: tenant.subscription ? {
         plan: tenant.subscription.plan,
         status: tenant.subscription.status,
-        monthlyLimit: tenant.subscription.monthlyQueryLimit,
+        stripeCustomerId: tenant.subscription.stripeSubscriptionId ? tenant.subscription.organizationId : null,
+        stripeSubscriptionId: tenant.subscription.stripeSubscriptionId || null,
         currentPeriodStart: tenant.subscription.currentPeriodStart?.toISOString() || null,
         currentPeriodEnd: tenant.subscription.currentPeriodEnd?.toISOString() || null,
-        stripeSubscriptionId: tenant.subscription.stripeSubscriptionId || null,
-      } : null,
-      stats: {
-        memberCount: tenant._count.members,
-        usageThisMonth,
-        monthlyLimit: tenant.subscription?.monthlyQueryLimit || 25,
+        monthlyQueryLimit: tenant.subscription.monthlyQueryLimit || planConfig?.monthlyQueryLimit || defaultMonthlyLimit,
+        totalUsage: usageThisMonth,
+        mrr,
+      } : {
+        plan: 'FREE',
+        status: 'ACTIVE',
+        stripeCustomerId: null,
+        stripeSubscriptionId: null,
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+        monthlyQueryLimit: defaultMonthlyLimit,
+        totalUsage: usageThisMonth,
+        mrr: 0,
       },
-      members: tenant.members.map(m => ({
-        id: m.user.id,
-        name: `${m.user.firstName || ''} ${m.user.lastName || ''}`.trim() || m.user.email,
-        email: m.user.email,
-        role: m.role,
-        userRole: m.user.role,
-        isActive: m.user.isActive,
-        joinedAt: m.joinedAt.toISOString(),
-      })),
+      stats: {
+        totalQueries,
+        queriesThisMonth: usageThisMonth,
+        avgQueriesPerDay: Math.round(avgQueriesPerDay * 10) / 10,
+        activeMembers30d,
+      },
     };
   }
 
@@ -1214,6 +1410,7 @@ export class AdminService {
       name: c.key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
       description: c.description,
       value: c.isSecret ? '********' : c.value,
+      category: c.category || 'Ostalo',
       updatedAt: c.updatedAt.toISOString(),
     }));
   }
@@ -1471,42 +1668,122 @@ export class AdminService {
   // =====================================
 
   async getIntegrations() {
-    const configs = await this.prisma.systemConfig.findMany({
-      where: {
-        OR: [
-          { key: { contains: 'API_KEY' } },
-          { key: { contains: 'SECRET' } },
-          { key: { contains: 'URL' } },
-          { category: 'integration' },
-        ],
-      },
+    // Define integration keys we want to show, grouped by category
+    const aiKeys = ['GEMINI_MODEL', 'RAG_STORE_ID'];
+    const smtpKeys = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM', 'SMTP_FROM_NAME', 'SMTP_SECURE'];
+    const allKeys = [...aiKeys, ...smtpKeys];
+
+    // Get existing configs from database
+    const existingConfigs = await this.prisma.systemConfig.findMany({
+      where: { key: { in: allKeys } },
     });
+    const existingMap = new Map(existingConfigs.map(c => [c.key, c]));
+
+    // Descriptions for settings
+    const descriptions: Record<string, string> = {
+      'GEMINI_MODEL': 'AI model za klasifikaciju KPD šifara',
+      'RAG_STORE_ID': 'Google File Search Store ID za RAG dokumente',
+      'SMTP_HOST': 'SMTP server hostname (npr. smtp.gmail.com)',
+      'SMTP_PORT': 'SMTP port (465 za SSL, 587 za TLS)',
+      'SMTP_USER': 'SMTP korisničko ime',
+      'SMTP_PASS': 'SMTP lozinka',
+      'SMTP_FROM': 'Email adresa pošiljatelja',
+      'SMTP_FROM_NAME': 'Ime pošiljatelja',
+      'SMTP_SECURE': 'Koristi li SSL (true/false)',
+    };
+
+    // Helper to build config item
+    const buildConfigItem = (key: string) => {
+      const config = existingMap.get(key);
+      const envValue = process.env[key] || '';
+      const value = config?.value || envValue;
+      const isSecret = key.includes('PASS') || key.includes('SECRET');
+      return {
+        key,
+        name: key.replace(/_/g, ' '),
+        description: descriptions[key] || '',
+        value: isSecret ? '' : value,
+        masked: isSecret ? '••••••••' : (value ? value.substring(0, 50) + (value.length > 50 ? '...' : '') : ''),
+        isConfigured: !!value && value !== '',
+        isRequired: key === 'SMTP_HOST' || key === 'SMTP_USER',
+      };
+    };
+
+    // Build grouped configs
+    const aiConfigs = aiKeys.map(buildConfigItem);
+    const smtpConfigs = smtpKeys.map(buildConfigItem);
+
+    // Check GEMINI_API_KEY status (from env only, never exposed)
+    const geminiApiKeyConfigured = !!process.env.GEMINI_API_KEY;
+
+    // Get compatible models for dropdown
+    const compatibleModels = [
+      { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Najbolji omjer cijene i performansi (preporučeno)' },
+      { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'Napredni model s enhanced thinking' },
+      { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', description: 'Najbrži i najjeftiniji model' },
+      { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro Preview', description: 'Najnoviji preview model (Dec 2025)' },
+    ];
+
+    // Calculate stats
+    const allConfigs = [...aiConfigs, ...smtpConfigs];
+    const configured = allConfigs.filter(c => c.isConfigured).length + (geminiApiKeyConfigured ? 1 : 0);
+    const missing = allConfigs.filter(c => !c.isConfigured && c.isRequired).length + (geminiApiKeyConfigured ? 0 : 1);
 
     return {
-      configs: configs.map((c) => ({
-        key: c.key,
-        name: c.key.replace(/_/g, ' '),
-        description: c.description || '',
-        value: c.isSecret ? '' : c.value,
-        masked: c.isSecret ? '••••••••' : c.value.substring(0, 20) + '...',
-        isConfigured: !!c.value && c.value !== '',
-        isRequired: c.key.includes('STRIPE') || c.key.includes('DATABASE'),
-      })),
+      // Grouped configs for new UI
+      groups: {
+        ai: {
+          title: 'AI Postavke',
+          description: 'Google Gemini AI za klasifikaciju KPD šifara',
+          icon: 'Zap',
+          configs: aiConfigs,
+          apiKeyConfigured: geminiApiKeyConfigured,
+          compatibleModels,
+        },
+        smtp: {
+          title: 'SMTP Postavke',
+          description: 'Konfiguracija za slanje emailova',
+          icon: 'Mail',
+          configs: smtpConfigs,
+        },
+      },
+      // Legacy flat list for backward compatibility
+      configs: allConfigs,
       stats: {
-        configured: configs.filter((c) => c.value).length,
-        missing: configs.filter((c) => !c.value).length,
-        optional: 0,
+        configured,
+        missing,
+        optional: allConfigs.length + 1 - configured - missing, // +1 for GEMINI_API_KEY
       },
       webhookUrls: {
-        stripe: `${process.env.API_URL || 'https://kpd.2klika.hr/api/v1'}/webhooks/stripe`,
+        stripe: `${process.env.PUBLIC_API_URL || 'https://kpd.2klika.hr/api/v1'}/webhooks/stripe`,
       },
     };
   }
 
   async updateIntegration(key: string, value: string) {
-    return this.prisma.systemConfig.update({
+    // Map keys to categories
+    const categoryMap: Record<string, string> = {
+      'GEMINI_MODEL': 'AI',
+      'RAG_STORE_ID': 'AI',
+      'SMTP_HOST': 'Email',
+      'SMTP_PORT': 'Email',
+      'SMTP_USER': 'Email',
+      'SMTP_PASS': 'Email',
+      'SMTP_FROM': 'Email',
+      'SMTP_FROM_NAME': 'Email',
+      'SMTP_SECURE': 'Email',
+    };
+
+    return this.prisma.systemConfig.upsert({
       where: { key },
-      data: { value },
+      update: { value },
+      create: {
+        key,
+        value,
+        category: categoryMap[key] || 'Integracije',
+        type: key.includes('PASS') ? ConfigType.SECRET : ConfigType.STRING,
+        isSecret: key.includes('PASS'),
+      },
     });
   }
 
@@ -1651,6 +1928,190 @@ export class AdminService {
       excludedUserId: excludeUserId || null,
       message: 'Svi korisnici će biti odjavljeni pri sljedećem zahtjevu',
     };
+  }
+
+  // =====================================
+  // EMAIL TEMPLATES
+  // =====================================
+
+  async getEmailTemplates() {
+    const templates = await this.prisma.emailTemplate.findMany({
+      orderBy: { type: 'asc' },
+    });
+
+    // If no templates exist, seed default templates
+    if (templates.length === 0) {
+      await this.seedDefaultEmailTemplates();
+      return this.prisma.emailTemplate.findMany({
+        orderBy: { type: 'asc' },
+      });
+    }
+
+    return templates;
+  }
+
+  async getEmailTemplate(type: string) {
+    return this.prisma.emailTemplate.findUnique({
+      where: { type },
+    });
+  }
+
+  async updateEmailTemplate(type: string, data: {
+    subject?: string;
+    content?: string;
+    isActive?: boolean;
+  }) {
+    const template = await this.prisma.emailTemplate.findUnique({
+      where: { type },
+    });
+
+    if (!template) {
+      throw new Error(`Template ${type} not found`);
+    }
+
+    return this.prisma.emailTemplate.update({
+      where: { type },
+      data: {
+        subject: data.subject ?? template.subject,
+        content: data.content ?? template.content,
+        isActive: data.isActive ?? template.isActive,
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  async resetEmailTemplate(type: string) {
+    const defaults = this.getDefaultTemplates();
+    const defaultTemplate = defaults.find(t => t.type === type);
+
+    if (!defaultTemplate) {
+      throw new Error(`Default template for ${type} not found`);
+    }
+
+    return this.prisma.emailTemplate.update({
+      where: { type },
+      data: {
+        subject: defaultTemplate.subject,
+        content: defaultTemplate.content,
+        isActive: true,
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  private async seedDefaultEmailTemplates() {
+    const defaults = this.getDefaultTemplates();
+
+    for (const template of defaults) {
+      await this.prisma.emailTemplate.upsert({
+        where: { type: template.type },
+        update: {},
+        create: template,
+      });
+    }
+  }
+
+  private getDefaultTemplates() {
+    return [
+      {
+        type: 'VERIFICATION',
+        name: 'Email Verifikacije',
+        subject: 'Potvrdite email adresu - KPD 2klika',
+        content: `<h1 style="color: #1a1a2e; margin: 0 0 20px;">Dobrodošli, {{firstName}}!</h1>
+<p style="color: #4a4a4a; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
+  Hvala što ste se registrirali na KPD 2klika - platformu za klasifikaciju proizvoda i usluga.
+</p>
+<p style="color: #4a4a4a; font-size: 16px; line-height: 1.6; margin: 0 0 30px;">
+  Molimo potvrdite svoju email adresu klikom na gumb ispod:
+</p>
+<div style="text-align: center; margin: 30px 0;">
+  <a href="{{verifyUrl}}"
+     style="display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+    Potvrdi email adresu
+  </a>
+</div>
+<p style="color: #888; font-size: 14px; margin: 20px 0 0;">
+  Ili kopirajte ovaj link u preglednik:<br>
+  <a href="{{verifyUrl}}" style="color: #667eea; word-break: break-all;">{{verifyUrl}}</a>
+</p>
+<p style="color: #888; font-size: 14px; margin: 20px 0 0;">
+  Link vrijedi 24 sata.
+</p>`,
+        variables: JSON.stringify(['firstName', 'verifyUrl']),
+      },
+      {
+        type: 'PASSWORD_RESET',
+        name: 'Reset Lozinke',
+        subject: 'Reset lozinke - KPD 2klika',
+        content: `<h1 style="color: #1a1a2e; margin: 0 0 20px;">Pozdrav, {{firstName}}!</h1>
+<p style="color: #4a4a4a; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
+  Primili smo zahtjev za promjenu lozinke vašeg KPD 2klika računa.
+</p>
+<p style="color: #4a4a4a; font-size: 16px; line-height: 1.6; margin: 0 0 30px;">
+  Kliknite na gumb ispod za postavljanje nove lozinke:
+</p>
+<div style="text-align: center; margin: 30px 0;">
+  <a href="{{resetUrl}}"
+     style="display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+    Postavi novu lozinku
+  </a>
+</div>
+<p style="color: #888; font-size: 14px; margin: 20px 0 0;">
+  Ili kopirajte ovaj link u preglednik:<br>
+  <a href="{{resetUrl}}" style="color: #667eea; word-break: break-all;">{{resetUrl}}</a>
+</p>
+<p style="color: #888; font-size: 14px; margin: 20px 0 0;">
+  Link vrijedi 1 sat. Ako niste zatražili promjenu lozinke, ignorirajte ovaj email.
+</p>`,
+        variables: JSON.stringify(['firstName', 'resetUrl']),
+      },
+      {
+        type: 'INVITATION',
+        name: 'Pozivnica u Organizaciju',
+        subject: 'Pozivnica u {{organizationName}} - KPD 2klika',
+        content: `<h1 style="color: #1a1a2e; margin: 0 0 20px;">Pozvani ste!</h1>
+<p style="color: #4a4a4a; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
+  <strong>{{inviterName}}</strong> vas poziva da se pridružite organizaciji
+  <strong>{{organizationName}}</strong> na KPD 2klika platformi.
+</p>
+<div style="text-align: center; margin: 30px 0;">
+  <a href="{{inviteUrl}}"
+     style="display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+    Prihvati pozivnicu
+  </a>
+</div>
+<p style="color: #888; font-size: 14px; margin: 20px 0 0;">
+  Pozivnica vrijedi 7 dana.
+</p>`,
+        variables: JSON.stringify(['inviterName', 'organizationName', 'inviteUrl']),
+      },
+      {
+        type: 'WELCOME',
+        name: 'Dobrodošlica',
+        subject: 'Dobrodošli u KPD 2klika!',
+        content: `<h1 style="color: #1a1a2e; margin: 0 0 20px;">Dobrodošli u KPD 2klika!</h1>
+<p style="color: #4a4a4a; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
+  Pozdrav {{firstName}},
+</p>
+<p style="color: #4a4a4a; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
+  Vaš račun je uspješno aktiviran! Sada možete koristiti KPD 2klika za klasifikaciju proizvoda i usluga prema NKD/KPD standardima.
+</p>
+<h2 style="color: #1a1a2e; font-size: 18px; margin: 30px 0 15px;">Što možete raditi:</h2>
+<ul style="color: #4a4a4a; font-size: 16px; line-height: 1.8; margin: 0 0 30px; padding-left: 20px;">
+  <li>Klasificirati proizvode i usluge pomoću AI</li>
+  <li>Pretraživati KPD šifre</li>
+  <li>Spremati povijest upita</li>
+  <li>Pozivati članove tima</li>
+</ul>
+<div style="text-align: center; margin: 30px 0;">
+  <a href="{{dashboardUrl}}"
+     style="display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+    Idi na Dashboard
+  </a>
+</div>`,
+        variables: JSON.stringify(['firstName', 'dashboardUrl']),
+      },
+    ];
   }
 
   // =====================================

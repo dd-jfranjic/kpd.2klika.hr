@@ -121,13 +121,21 @@ async function main() {
   console.log('⚙️ Seeding system configurations...');
 
   const systemConfigs = [
-    // AI Settings
+    // AI Settings (Integrations tab)
     {
-      key: 'ai.model_name',
-      value: 'gemini-2.0-flash-exp',
+      key: 'GEMINI_MODEL',
+      value: 'gemini-2.5-flash',
       type: ConfigType.STRING,
-      category: 'ai',
-      description: 'AI model za klasifikaciju',
+      category: 'AI',
+      description: 'Google Gemini model za RAG pretragu (RAG kompatibilan)',
+      isSecret: false,
+    },
+    {
+      key: 'RAG_STORE_ID',
+      value: '',
+      type: ConfigType.STRING,
+      category: 'AI',
+      description: 'Google Gemini File Search Store ID za RAG dokumente',
       isSecret: false,
     },
     {

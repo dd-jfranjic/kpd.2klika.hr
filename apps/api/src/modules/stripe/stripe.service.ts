@@ -181,11 +181,16 @@ export class StripeService {
     });
 
     if (!subscription) {
+      // Dohvati FREE plan iz PlanConfig
+      const freePlan = await this.prisma.planConfig.findUnique({
+        where: { plan: 'FREE' },
+      });
       // Vrati default FREE subscription
       return {
         plan: 'FREE',
         status: 'ACTIVE',
-        dailyQueryLimit: 5,
+        dailyQueryLimit: freePlan?.dailyQueryLimit ?? 0,
+        monthlyQueryLimit: freePlan?.monthlyQueryLimit ?? freePlan?.dailyQueryLimit ?? 0,
         currentPeriodEnd: null,
         cancelAtPeriodEnd: false,
       };
@@ -299,8 +304,8 @@ export class StripeService {
       data: {
         plan: newPlan,
         stripePriceId: newPriceId,
-        dailyQueryLimit: planConfig?.dailyQueryLimit ?? 5,
-        monthlyQueryLimit: planConfig?.monthlyQueryLimit ?? planConfig?.dailyQueryLimit ?? 5,
+        dailyQueryLimit: planConfig?.dailyQueryLimit ?? 0,
+        monthlyQueryLimit: planConfig?.monthlyQueryLimit ?? planConfig?.dailyQueryLimit ?? 0,
         currentPeriodStart: new Date(), // Reset perioda za usage counting
       },
     });
@@ -436,8 +441,8 @@ export class StripeService {
         currentPeriodStart: new Date(subscription.current_period_start * 1000),
         currentPeriodEnd: new Date(subscription.current_period_end * 1000),
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
-        dailyQueryLimit: planConfig?.dailyQueryLimit ?? 5,
-        monthlyQueryLimit: planConfig?.monthlyQueryLimit ?? planConfig?.dailyQueryLimit ?? 5,
+        dailyQueryLimit: planConfig?.dailyQueryLimit ?? 0,
+        monthlyQueryLimit: planConfig?.monthlyQueryLimit ?? planConfig?.dailyQueryLimit ?? 0,
       },
       update: {
         stripeSubscriptionId: subscription.id,
@@ -447,8 +452,8 @@ export class StripeService {
         currentPeriodStart: new Date(subscription.current_period_start * 1000),
         currentPeriodEnd: new Date(subscription.current_period_end * 1000),
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
-        dailyQueryLimit: planConfig?.dailyQueryLimit ?? 5,
-        monthlyQueryLimit: planConfig?.monthlyQueryLimit ?? planConfig?.dailyQueryLimit ?? 5,
+        dailyQueryLimit: planConfig?.dailyQueryLimit ?? 0,
+        monthlyQueryLimit: planConfig?.monthlyQueryLimit ?? planConfig?.dailyQueryLimit ?? 0,
       },
     });
 
@@ -515,8 +520,8 @@ export class StripeService {
         }),
         currentPeriodEnd: new Date(subscription.current_period_end * 1000),
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
-        dailyQueryLimit: planConfig?.dailyQueryLimit ?? 5,
-        monthlyQueryLimit: planConfig?.monthlyQueryLimit ?? planConfig?.dailyQueryLimit ?? 5,
+        dailyQueryLimit: planConfig?.dailyQueryLimit ?? 0,
+        monthlyQueryLimit: planConfig?.monthlyQueryLimit ?? planConfig?.dailyQueryLimit ?? 0,
         // Očisti Stripe ID ako je otkazan
         ...(subscription.status === 'canceled' && { stripeSubscriptionId: null }),
       },
@@ -544,6 +549,11 @@ export class StripeService {
       orgId = org.id;
     }
 
+    // Dohvati FREE plan limite iz PlanConfig
+    const freePlan = await this.prisma.planConfig.findUnique({
+      where: { plan: 'FREE' },
+    });
+
     // Downgrade na FREE
     await this.prisma.subscription.update({
       where: { organizationId: orgId },
@@ -552,8 +562,8 @@ export class StripeService {
         status: 'CANCELLED',
         stripeSubscriptionId: null,
         stripePriceId: null,
-        dailyQueryLimit: 5,
-        monthlyQueryLimit: null,
+        dailyQueryLimit: freePlan?.dailyQueryLimit ?? 0,
+        monthlyQueryLimit: freePlan?.monthlyQueryLimit ?? freePlan?.dailyQueryLimit ?? 0,
         cancelAtPeriodEnd: false,
       },
     });

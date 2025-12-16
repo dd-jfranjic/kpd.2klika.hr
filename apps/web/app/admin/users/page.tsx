@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/contexts/auth-context';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { DashboardLayout } from '@/components/dashboard-layout';
@@ -18,6 +19,7 @@ import {
   Mail,
   Filter,
   Trash2,
+  RefreshCw,
 } from 'lucide-react';
 import { PlanBadge, StatusIndicator, UsageProgressBar } from '@/components/admin';
 
@@ -56,6 +58,8 @@ function AdminUsersPageContent() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [actionUserId, setActionUserId] = useState<string | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('all');
 
   // Bulk selection
@@ -65,6 +69,55 @@ function AdminUsersPageContent() {
   // Filters
   const [planFilter, setPlanFilter] = useState<string>('');
   const [showFilters, setShowFilters] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (actionUserId) {
+        const target = e.target as HTMLElement;
+        if (!target.closest('[data-dropdown-menu]') && !target.closest('[data-dropdown-trigger]')) {
+          setActionUserId(null);
+          setDropdownPosition(null);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [actionUserId]);
+
+  const handleOpenDropdown = (userId: string, event: React.MouseEvent<HTMLButtonElement>) => {
+    if (actionUserId === userId) {
+      setActionUserId(null);
+      setDropdownPosition(null);
+      return;
+    }
+
+    const button = event.currentTarget;
+    const rect = button.getBoundingClientRect();
+    const dropdownWidth = 224; // w-56 = 14rem = 224px
+    const dropdownHeight = 400; // max-h-[400px]
+
+    // Calculate position - prefer above the button, but go below if not enough space
+    let top = rect.top - dropdownHeight - 8; // 8px margin
+    if (top < 10) {
+      // Not enough space above, show below
+      top = rect.bottom + 8;
+    }
+
+    // Ensure dropdown doesn't go off screen to the right
+    let left = rect.right - dropdownWidth;
+    if (left < 10) {
+      left = 10;
+    }
+
+    setDropdownPosition({ top, left });
+    setActionUserId(userId);
+  };
 
   useEffect(() => {
     if (!authLoading && (!user || !isAdmin)) {
@@ -306,6 +359,49 @@ function AdminUsersPageContent() {
     setActionUserId(null);
   };
 
+  const handleResetUsage = async (userId: string, userEmail: string) => {
+    if (!token) return;
+
+    const confirmed = confirm(
+      `🔄 RESETIRANJE POTROŠNJE\n\n` +
+      `Jeste li sigurni da želite resetirati mjesečnu potrošnju za "${userEmail}"?\n\n` +
+      `Ova akcija će:\n` +
+      `• Obrisati sve upite iz ovog mjeseca\n` +
+      `• Vratiti korisniku pun mjesečni limit`
+    );
+
+    if (!confirmed) {
+      setActionUserId(null);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/v1/admin/users/${userId}/reset-usage`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        credentials: 'include',
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        alert(
+          `✅ Potrošnja resetirana!\n\n` +
+          `${data.data.message}\n` +
+          `Obrisano upita: ${data.data.deletedQueries}\n` +
+          `Novi limit: ${data.data.newLimit}`
+        );
+        fetchUsers();
+      } else {
+        const error = await res.json();
+        alert(`❌ Greška: ${error.message || 'Nepoznata greška'}`);
+      }
+    } catch (error) {
+      console.error('Error resetting usage:', error);
+      alert('❌ Greška pri resetiranju potrošnje');
+    }
+    setActionUserId(null);
+  };
+
   const tabs: { id: TabType; label: string; count?: number }[] = [
     { id: 'all', label: 'Svi' },
     { id: 'active', label: 'Aktivni' },
@@ -468,13 +564,13 @@ function AdminUsersPageContent() {
         )}
 
         {/* Users Table */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-visible">
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-visible pb-2">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
@@ -558,88 +654,13 @@ function AdminUsersPageContent() {
                         <StatusIndicator status={u.suspended ? 'suspended' : 'active'} />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="relative">
-                          <button
-                            onClick={() => setActionUserId(actionUserId === u.id ? null : u.id)}
-                            className="p-1 rounded hover:bg-gray-100"
-                          >
-                            <MoreVertical className="w-5 h-5 text-gray-400" />
-                          </button>
-
-                          {actionUserId === u.id && (
-                            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-                              <div className="py-1">
-                                <Link
-                                  href={`/admin/users/${u.id}`}
-                                  className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                  Pogledaj detalje
-                                </Link>
-                                <button
-                                  onClick={() => handleImpersonate(u.id)}
-                                  className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-purple-700 hover:bg-purple-50"
-                                >
-                                  <UserCog className="w-4 h-4" />
-                                  Impersonate
-                                </button>
-                                <hr className="my-1" />
-                                <button
-                                  onClick={() => handleChangePlan(u.id, u.organizationId)}
-                                  className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-                                >
-                                  <CreditCard className="w-4 h-4" />
-                                  Promijeni plan
-                                </button>
-                                <hr className="my-1" />
-                                {u.suspended ? (
-                                  <button
-                                    onClick={() => handleSuspend(u.id, false)}
-                                    className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-green-600 hover:bg-green-50"
-                                  >
-                                    <UserCheck className="w-4 h-4" />
-                                    Aktiviraj
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => handleSuspend(u.id, true)}
-                                    className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                                  >
-                                    <UserX className="w-4 h-4" />
-                                    Suspendiraj
-                                  </button>
-                                )}
-                                <hr className="my-1" />
-                                {u.role !== 'SUPER_ADMIN' && (
-                                  <button
-                                    onClick={() => handleRoleChange(u.id, 'SUPER_ADMIN')}
-                                    className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-blue-700 hover:bg-blue-50"
-                                  >
-                                    <Shield className="w-4 h-4" />
-                                    Postavi kao SUPER_ADMIN
-                                  </button>
-                                )}
-                                {u.role === 'SUPER_ADMIN' && (
-                                  <button
-                                    onClick={() => handleRoleChange(u.id, 'MEMBER')}
-                                    className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-                                  >
-                                    <Shield className="w-4 h-4" />
-                                    Ukloni SUPER_ADMIN
-                                  </button>
-                                )}
-                                <hr className="my-1" />
-                                <button
-                                  onClick={() => handleDeleteUser(u.id, u.email)}
-                                  className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 font-medium"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  Obriši trajno
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                        <button
+                          data-dropdown-trigger
+                          onClick={(e) => handleOpenDropdown(u.id, e)}
+                          className="p-1 rounded hover:bg-gray-100"
+                        >
+                          <MoreVertical className="w-5 h-5 text-gray-400" />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -681,6 +702,104 @@ function AdminUsersPageContent() {
           )}
         </div>
       </div>
+
+      {/* Portal Dropdown Menu - renders outside table DOM hierarchy */}
+      {isMounted && actionUserId && dropdownPosition && createPortal(
+        <div
+          data-dropdown-menu
+          className="fixed w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-[9999] max-h-[400px] overflow-y-auto"
+          style={{
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+          }}
+        >
+          <div className="py-1">
+            {(() => {
+              const u = users.find(user => user.id === actionUserId);
+              if (!u) return null;
+              return (
+                <>
+                  <Link
+                    href={`/admin/users/${u.id}`}
+                    className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    <Eye className="w-4 h-4" />
+                    Pogledaj detalje
+                  </Link>
+                  <button
+                    onClick={() => handleImpersonate(u.id)}
+                    className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-purple-700 hover:bg-purple-50"
+                  >
+                    <UserCog className="w-4 h-4" />
+                    Impersonate
+                  </button>
+                  <hr className="my-1" />
+                  <button
+                    onClick={() => handleChangePlan(u.id, u.organizationId)}
+                    className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    Promijeni plan
+                  </button>
+                  <button
+                    onClick={() => handleResetUsage(u.id, u.email)}
+                    className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-orange-600 hover:bg-orange-50"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Resetiraj potrošnju
+                  </button>
+                  <hr className="my-1" />
+                  {u.suspended ? (
+                    <button
+                      onClick={() => handleSuspend(u.id, false)}
+                      className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-green-600 hover:bg-green-50"
+                    >
+                      <UserCheck className="w-4 h-4" />
+                      Aktiviraj
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleSuspend(u.id, true)}
+                      className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                    >
+                      <UserX className="w-4 h-4" />
+                      Suspendiraj
+                    </button>
+                  )}
+                  <hr className="my-1" />
+                  {u.role !== 'SUPER_ADMIN' && (
+                    <button
+                      onClick={() => handleRoleChange(u.id, 'SUPER_ADMIN')}
+                      className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-blue-700 hover:bg-blue-50"
+                    >
+                      <Shield className="w-4 h-4" />
+                      Postavi kao SUPER_ADMIN
+                    </button>
+                  )}
+                  {u.role === 'SUPER_ADMIN' && (
+                    <button
+                      onClick={() => handleRoleChange(u.id, 'MEMBER')}
+                      className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Shield className="w-4 h-4" />
+                      Ukloni SUPER_ADMIN
+                    </button>
+                  )}
+                  <hr className="my-1" />
+                  <button
+                    onClick={() => handleDeleteUser(u.id, u.email)}
+                    className="flex items-center gap-2 w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 font-medium"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Obriši trajno
+                  </button>
+                </>
+              );
+            })()}
+          </div>
+        </div>,
+        document.body
+      )}
     </DashboardLayout>
   );
 }

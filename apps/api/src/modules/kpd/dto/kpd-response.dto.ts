@@ -7,6 +7,9 @@ export interface KpdSuggestion {
   categoryId: string;
   isFinal: boolean;
   reason?: string;
+  // Validation fields (za provjeru ispravnosti šifre)
+  isValidation?: boolean;  // True ako je ovo validacija postojeće šifre
+  isValid?: boolean;       // Je li šifra valjana za navedenu namjenu
 }
 
 export interface KpdSearchResponse {

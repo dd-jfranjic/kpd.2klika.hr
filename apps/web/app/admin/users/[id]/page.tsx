@@ -27,7 +27,6 @@ import { PlanBadge, StatusIndicator, UsageProgressBar } from '@/components/admin
 
 interface UserDetail {
   id: string;
-  clerkId: string;
   email: string;
   firstName: string | null;
   lastName: string | null;
@@ -321,10 +320,6 @@ export default function UserDetailPage() {
               <div className="flex justify-between">
                 <dt className="text-sm text-gray-500">Email</dt>
                 <dd className="text-sm font-medium text-gray-900">{userData.email}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-sm text-gray-500">Clerk ID</dt>
-                <dd className="text-sm font-mono text-gray-600 text-xs">{userData.clerkId}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-sm text-gray-500">Status</dt>

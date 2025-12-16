@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Sparkles, Loader2, AlertCircle, Info, Copy, Check, Clock, Calendar, ArrowUpCircle, Timer } from 'lucide-react';
 import Link from 'next/link';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api/v1';
+// Koristi Next.js API route za KPD search (duži timeout - 120s)
+const KPD_SEARCH_API = '/api/kpd/search';
 
 interface KpdSuggestion {
   code: string;
@@ -102,11 +103,11 @@ export function AiSuggestionPanel({
         query += ` - ${itemDescription.trim()}`;
       }
 
-      // Add timeout - 30 seconds max
+      // Add timeout - 120 seconds max (AI thinking mode treba više vremena)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
 
-      const response = await fetch(`${API_BASE}/kpd/search`, {
+      const response = await fetch(KPD_SEARCH_API, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

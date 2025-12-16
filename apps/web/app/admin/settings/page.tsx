@@ -45,6 +45,21 @@ interface Integration {
   isRequired: boolean;
 }
 
+interface GeminiModel {
+  value: string;
+  label: string;
+  description: string;
+}
+
+interface IntegrationGroup {
+  title: string;
+  description: string;
+  icon: string;
+  configs: Integration[];
+  apiKeyConfigured?: boolean;
+  compatibleModels?: GeminiModel[];
+}
+
 interface IntegrationStats {
   configured: number;
   missing: number;
@@ -84,6 +99,7 @@ function AdminSettingsPageContent() {
 
   // Integrations state
   const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [integrationGroups, setIntegrationGroups] = useState<{ ai?: IntegrationGroup; smtp?: IntegrationGroup }>({});
   const [integrationStats, setIntegrationStats] = useState<IntegrationStats | null>(null);
   const [webhookUrls, setWebhookUrls] = useState<{ stripe: string } | null>(null);
   const [showValues, setShowValues] = useState<Record<string, boolean>>({});
@@ -146,14 +162,29 @@ function AdminSettingsPageContent() {
       // Process integrations
       if (integrationsRes.ok) {
         const json = await integrationsRes.json();
-        const data = json.data || { configs: [], stats: { configured: 0, missing: 0, optional: 0 }, webhookUrls: { stripe: '' } };
+        const data = json.data || { configs: [], groups: {}, stats: { configured: 0, missing: 0, optional: 0 }, webhookUrls: { stripe: '' } };
         setIntegrations(data.configs || []);
+        setIntegrationGroups(data.groups || {});
         setIntegrationStats(data.stats);
         setWebhookUrls(data.webhookUrls);
 
         const intValues: Record<string, string> = {};
+        // Get values from all groups
+        if (data.groups?.ai?.configs) {
+          data.groups.ai.configs.forEach((i: Integration) => {
+            intValues[i.key] = i.value || '';
+          });
+        }
+        if (data.groups?.smtp?.configs) {
+          data.groups.smtp.configs.forEach((i: Integration) => {
+            intValues[i.key] = i.value || '';
+          });
+        }
+        // Fallback to flat configs
         (data.configs || []).forEach((i: Integration) => {
-          intValues[i.key] = i.value || '';
+          if (!intValues[i.key]) {
+            intValues[i.key] = i.value || '';
+          }
         });
         setIntegrationEditValues(intValues);
       }
@@ -427,12 +458,23 @@ function AdminSettingsPageContent() {
                             <div className="flex-1">
                               <label className="block font-medium text-gray-900 mb-1">{config.key}</label>
                               <p className="text-sm text-gray-500 mb-2">{config.description || 'Nema opisa'}</p>
-                              <input
-                                type="text"
-                                value={editValues[config.key] || ''}
-                                onChange={(e) => setEditValues({ ...editValues, [config.key]: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                              />
+                              {/* Use textarea for PROMPT fields and other long text */}
+                              {config.key.includes('PROMPT') || config.key.includes('ADDRESSES') ? (
+                                <textarea
+                                  rows={6}
+                                  value={editValues[config.key] || ''}
+                                  onChange={(e) => setEditValues({ ...editValues, [config.key]: e.target.value })}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
+                                  placeholder="Unesite vrijednost..."
+                                />
+                              ) : (
+                                <input
+                                  type="text"
+                                  value={editValues[config.key] || ''}
+                                  onChange={(e) => setEditValues({ ...editValues, [config.key]: e.target.value })}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                />
+                              )}
                             </div>
                             <button
                               onClick={() => handleSaveConfig(config.key)}
@@ -552,83 +594,188 @@ function AdminSettingsPageContent() {
                   </div>
                 )}
 
+                {/* AI Settings Group */}
+                {integrationGroups.ai && (
+                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-yellow-50 to-orange-50">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center">
+                          <Zap className="w-5 h-5 text-yellow-600" />
+                        </div>
+                        <div>
+                          <h2 className="text-lg font-semibold text-gray-900">{integrationGroups.ai.title}</h2>
+                          <p className="text-sm text-gray-500">{integrationGroups.ai.description}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-6 space-y-6">
+                      {/* API Key Status (read-only) */}
+                      <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                        <div>
+                          <h3 className="font-medium text-gray-900">GEMINI_API_KEY</h3>
+                          <p className="text-sm text-gray-500">API ključ za Google Gemini (konfigurira se u .env)</p>
+                        </div>
+                        {integrationGroups.ai.apiKeyConfigured ? (
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                            <CheckCircle className="w-4 h-4" />
+                            Konfigurirano
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
+                            <XCircle className="w-4 h-4" />
+                            Nije konfigurirano
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Model Selection Dropdown */}
+                      {integrationGroups.ai.compatibleModels && (
+                        <div className="py-3 border-b border-gray-100">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <h3 className="font-medium text-gray-900 mb-1">GEMINI_MODEL</h3>
+                              <p className="text-sm text-gray-500 mb-3">Odaberi AI model za klasifikaciju (RAG kompatibilni)</p>
+                              <select
+                                value={integrationEditValues['GEMINI_MODEL'] || 'gemini-2.5-flash'}
+                                onChange={(e) => setIntegrationEditValues({ ...integrationEditValues, 'GEMINI_MODEL': e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                              >
+                                {integrationGroups.ai.compatibleModels.map((model) => (
+                                  <option key={model.value} value={model.value}>
+                                    {model.label} - {model.description}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <button
+                              onClick={() => handleSaveIntegration('GEMINI_MODEL')}
+                              disabled={saving === 'GEMINI_MODEL'}
+                              className="mt-7 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+                            >
+                              {saving === 'GEMINI_MODEL' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                              Spremi
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* RAG Store ID */}
+                      {integrationGroups.ai.configs.find(c => c.key === 'RAG_STORE_ID') && (
+                        <div className="py-3">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <h3 className="font-medium text-gray-900 mb-1">RAG_STORE_ID</h3>
+                              <p className="text-sm text-gray-500 mb-3">Google File Search Store ID za RAG dokumente</p>
+                              <input
+                                type="text"
+                                value={integrationEditValues['RAG_STORE_ID'] || ''}
+                                onChange={(e) => setIntegrationEditValues({ ...integrationEditValues, 'RAG_STORE_ID': e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
+                                placeholder="fileSearchStores/..."
+                              />
+                            </div>
+                            <button
+                              onClick={() => handleSaveIntegration('RAG_STORE_ID')}
+                              disabled={saving === 'RAG_STORE_ID'}
+                              className="mt-7 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+                            >
+                              {saving === 'RAG_STORE_ID' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                              Spremi
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* SMTP Settings Group */}
+                {integrationGroups.smtp && (
+                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                          <Mail className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <h2 className="text-lg font-semibold text-gray-900">{integrationGroups.smtp.title}</h2>
+                          <p className="text-sm text-gray-500">{integrationGroups.smtp.description}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {integrationGroups.smtp.configs.map((config) => (
+                        <div key={config.key} className="px-6 py-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h3 className="font-medium text-gray-900">{config.key}</h3>
+                                {getIntegrationStatusBadge(config)}
+                              </div>
+                              <p className="text-sm text-gray-500 mb-3">{config.description}</p>
+                              <div className="relative">
+                                <input
+                                  type={config.key.includes('PASS') ? (showValues[config.key] ? 'text' : 'password') : 'text'}
+                                  value={integrationEditValues[config.key] || ''}
+                                  onChange={(e) => setIntegrationEditValues({ ...integrationEditValues, [config.key]: e.target.value })}
+                                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
+                                  placeholder={config.key.includes('PORT') ? '587' : 'Unesite vrijednost...'}
+                                />
+                                {config.key.includes('PASS') && (
+                                  <button
+                                    onClick={() => setShowValues({ ...showValues, [config.key]: !showValues[config.key] })}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                  >
+                                    {showValues[config.key] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleSaveIntegration(config.key)}
+                              disabled={saving === config.key}
+                              className="mt-7 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+                            >
+                              {saving === config.key ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                              Spremi
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Webhook URLs */}
                 {webhookUrls && webhookUrls.stripe && (
-                  <div className="bg-blue-50 rounded-xl border border-blue-200 p-4">
-                    <h3 className="font-semibold text-blue-900 mb-2">Webhook URL-ovi</h3>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-blue-700">Stripe Webhook:</span>
-                      <code className="flex-1 bg-white px-3 py-1.5 rounded border border-blue-200 font-mono text-sm text-blue-800 overflow-x-auto">
+                  <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-pink-50">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                          <Plug className="w-5 h-5 text-purple-600" />
+                        </div>
+                        <div>
+                          <h2 className="text-lg font-semibold text-gray-900">Stripe Webhook</h2>
+                          <p className="text-sm text-gray-500">URL za Stripe webhook events</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-6">
+                      <p className="text-sm text-gray-500 mb-2">Kopiraj ovaj URL u Stripe Dashboard → Webhooks</p>
+                      <code className="block w-full bg-gray-50 px-4 py-3 rounded-lg border border-gray-200 font-mono text-sm text-gray-800 overflow-x-auto">
                         {webhookUrls.stripe}
                       </code>
                     </div>
                   </div>
                 )}
 
-                {/* Integrations List */}
-                <div className="space-y-4">
-                  {integrations.map((integration) => (
-                    <div
-                      key={integration.key}
-                      className="bg-white rounded-xl border border-gray-200 p-6"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-4 flex-1">
-                          <div className="w-12 h-12 rounded-lg bg-primary-100 flex items-center justify-center">
-                            <Plug className="w-6 h-6 text-primary-600" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-1">
-                              <h3 className="font-semibold text-gray-900">{integration.key}</h3>
-                              {getIntegrationStatusBadge(integration)}
-                            </div>
-                            <p className="text-sm text-gray-500 mb-4">{integration.description || 'Nema opisa'}</p>
-
-                            <div className="relative">
-                              <input
-                                type={showValues[integration.key] ? 'text' : 'password'}
-                                value={integrationEditValues[integration.key] || ''}
-                                onChange={(e) => setIntegrationEditValues({ ...integrationEditValues, [integration.key]: e.target.value })}
-                                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
-                                placeholder="Unesite API ključ..."
-                              />
-                              <button
-                                onClick={() => setShowValues({ ...showValues, [integration.key]: !showValues[integration.key] })}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                              >
-                                {showValues[integration.key] ? (
-                                  <EyeOff className="w-4 h-4" />
-                                ) : (
-                                  <Eye className="w-4 h-4" />
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-
-                        <button
-                          onClick={() => handleSaveIntegration(integration.key)}
-                          disabled={saving === integration.key}
-                          className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
-                        >
-                          {saving === integration.key ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Save className="w-4 h-4" />
-                          )}
-                          Spremi
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {integrations.length === 0 && (
-                    <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">
-                      <Plug className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                      <p>Nema definiranih integracija</p>
-                    </div>
-                  )}
-                </div>
+                {/* Fallback for empty state */}
+                {!integrationGroups.ai && !integrationGroups.smtp && integrations.length === 0 && (
+                  <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">
+                    <Plug className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <p>Nema definiranih integracija</p>
+                  </div>
+                )}
               </div>
             )}
 

@@ -50,9 +50,9 @@
     "NODE_ENV",
     "DATABASE_URL",
     "REDIS_URL",
-    "CLERK_SECRET_KEY",
     "STRIPE_SECRET_KEY",
-    "GEMINI_API_KEY"
+    "GEMINI_API_KEY",
+    "JWT_SECRET"
   ],
   "globalPassThroughEnv": [
     "NEXT_PUBLIC_*"

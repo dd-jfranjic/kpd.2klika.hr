@@ -55,7 +55,7 @@ export type SystemConfigKey =
  */
 export const SystemConfigDefaults: Record<SystemConfigKey, unknown> = {
   // AI Settings
-  [SystemConfigKeys.AI_MODEL_NAME]: 'gemini-2.0-flash-exp',
+  [SystemConfigKeys.AI_MODEL_NAME]: 'gemini-2.5-flash',
   [SystemConfigKeys.AI_MAX_TOKENS]: 2048,
   [SystemConfigKeys.AI_TEMPERATURE]: 0.3,
   [SystemConfigKeys.AI_SYSTEM_PROMPT]: `Ti si stručnjak za klasifikaciju poslovnih djelatnosti prema KPD (Klasifikacija Proizvoda po Djelatnostima) standardu.

@@ -43,13 +43,13 @@ export function useSubscription() {
       setSubscription({
         plan: 'FREE',
         status: 'ACTIVE',
-        dailyQueryLimit: 5,
+        dailyQueryLimit: 3, // FREE tier default
         currentPeriodEnd: null,
         cancelAtPeriodEnd: false,
       });
       setUsage({
-        remainingQueries: 5,
-        monthlyLimit: 5,
+        remainingQueries: 3,
+        monthlyLimit: 3, // FREE tier default
         usedThisMonth: 0,
       });
       setLoading(false);
@@ -85,7 +85,7 @@ export function useSubscription() {
         setSubscription({
           plan: 'FREE',
           status: 'ACTIVE',
-          dailyQueryLimit: 5,
+          dailyQueryLimit: 3, // FREE tier default
           currentPeriodEnd: null,
           cancelAtPeriodEnd: false,
         });
@@ -105,7 +105,7 @@ export function useSubscription() {
       } else {
         // Fallback to subscription monthly limit if usage endpoint fails
         const subData = subResponse.ok ? await subResponse.clone().json() : null;
-        const limit = subData?.subscription?.monthlyQueryLimit || 5;
+        const limit = subData?.subscription?.monthlyQueryLimit || 3; // FREE tier default
         setUsage({
           remainingQueries: limit,
           monthlyLimit: limit,
@@ -119,7 +119,7 @@ export function useSubscription() {
       setSubscription({
         plan: 'FREE',
         status: 'ACTIVE',
-        dailyQueryLimit: 5,
+        dailyQueryLimit: 3, // FREE tier default
         currentPeriodEnd: null,
         cancelAtPeriodEnd: false,
       });
@@ -154,7 +154,7 @@ export function useSubscription() {
     error,
     planName,
     remainingQueries: usage?.remainingQueries ?? 0,
-    monthlyLimit: usage?.monthlyLimit ?? 5,
+    monthlyLimit: usage?.monthlyLimit ?? 3, // FREE tier default
     usedThisMonth: usage?.usedThisMonth ?? 0,
     updateRemainingQueries,
     refetch: fetchSubscription,

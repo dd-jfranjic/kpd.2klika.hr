@@ -415,6 +415,25 @@ model AuditLog {
 }
 
 // =====================================
+// EMAIL TEMPLATES (Admin-editable)
+// =====================================
+
+model EmailTemplate {
+  id          String   @id @default(cuid())
+  type        String   @unique  // VERIFICATION, PASSWORD_RESET, INVITATION, WELCOME
+  name        String            // Display name: "Email Verifikacije"
+  subject     String            // Email subject line
+  content     String   @db.Text // HTML content with {{placeholders}}
+  variables   Json     @default("[]") // Available placeholders
+
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([type])
+}
+
+// =====================================
 // REFRESH TOKENS (SECURITY)
 // =====================================
 

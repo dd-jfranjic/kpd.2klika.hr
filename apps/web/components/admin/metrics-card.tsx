@@ -5,6 +5,7 @@ import Link from 'next/link';
 
 interface MetricsCardProps {
   title: string;
+  subtitle?: string;
   value: string | number;
   change?: {
     value: number;
@@ -15,12 +16,13 @@ interface MetricsCardProps {
   loading?: boolean;
 }
 
-export function MetricsCard({ title, value, change, icon: Icon, href, loading }: MetricsCardProps) {
+export function MetricsCard({ title, subtitle, value, change, icon: Icon, href, loading }: MetricsCardProps) {
   const content = (
     <div className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <p className="text-sm font-medium text-gray-500">{title}</p>
+          {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
           {loading ? (
             <div className="mt-2 h-8 w-24 bg-gray-200 animate-pulse rounded"></div>
           ) : (

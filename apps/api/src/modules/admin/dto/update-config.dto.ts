@@ -10,6 +10,7 @@ export const ALLOWED_CONFIG_KEYS = [
   'AI_ENABLED',
   'AI_MODEL',
   'AI_TEMPERATURE',
+  'AI_SYSTEM_PROMPT',
   'SUPPORT_EMAIL',
   'TERMS_URL',
   'PRIVACY_URL',
@@ -24,8 +25,24 @@ export const ALLOWED_CONFIG_KEYS = [
 export const ALLOWED_INTEGRATION_KEYS = [
   'STRIPE_WEBHOOK_URL',
   'GEMINI_MODEL',
+  'RAG_STORE_ID',
+  'SMTP_HOST',
+  'SMTP_PORT',
+  'SMTP_USER',
+  'SMTP_PASS',
+  'SMTP_FROM',
   'SMTP_FROM_NAME',
   'SMTP_FROM_EMAIL',
+  'SMTP_SECURE',
+] as const;
+
+// Models compatible with Google Gemini File Search (RAG)
+// Reference: https://ai.google.dev/gemini-api/docs/file-search
+export const GEMINI_RAG_COMPATIBLE_MODELS = [
+  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Najbolji omjer cijene i performansi (preporučeno)' },
+  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'Napredni model s enhanced thinking' },
+  { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', description: 'Najbrži i najjeftiniji model' },
+  { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro Preview', description: 'Najnoviji preview model' },
 ] as const;
 
 export const ALLOWED_FEATURE_FLAGS = [

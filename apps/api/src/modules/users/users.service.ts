@@ -107,12 +107,17 @@ export class UsersService {
     const organizationId = primaryMembership?.organizationId;
 
     if (!organizationId) {
+      // Dohvati FREE plan iz PlanConfig - jedini izvor istine
+      const freePlan = await this.prisma.planConfig.findUnique({
+        where: { plan: 'FREE' },
+      });
+      const defaultLimit = freePlan?.monthlyQueryLimit ?? freePlan?.dailyQueryLimit ?? 0;
       return {
         todayQueries: 0,
         monthQueries: 0,
         totalQueries: 0,
-        monthlyLimit: 5,
-        remainingThisMonth: 5,
+        monthlyLimit: defaultLimit,
+        remainingThisMonth: defaultLimit,
         avgConfidence: 0,
         planName: 'FREE',
       };
@@ -156,7 +161,15 @@ export class UsersService {
 
     // Get subscription info - use monthlyQueryLimit
     const subscription = primaryMembership?.organization?.subscription;
-    const monthlyLimit = subscription?.monthlyQueryLimit ?? 5;
+    let monthlyLimit = subscription?.monthlyQueryLimit;
+
+    // Ako nema limit u subscriptioni, dohvati iz PlanConfig
+    if (!monthlyLimit) {
+      const freePlan = await this.prisma.planConfig.findUnique({
+        where: { plan: 'FREE' },
+      });
+      monthlyLimit = freePlan?.monthlyQueryLimit ?? freePlan?.dailyQueryLimit ?? 0;
+    }
     const planName = subscription?.plan || 'FREE';
     const remainingThisMonth = Math.max(0, monthlyLimit - monthQueries);
 

@@ -166,7 +166,7 @@ export class KpdSuggestionService {
    * Validiraj AI prijedloge protiv lokalne baze
    */
   private async validateSuggestions(
-    suggestions: { code: string; name: string; confidence: number; reason?: string }[],
+    suggestions: { code: string; name: string; confidence: number; reason?: string; isValidation?: boolean; isValid?: boolean }[],
   ): Promise<KpdSuggestion[]> {
     const validated: KpdSuggestion[] = [];
 
@@ -186,9 +186,27 @@ export class KpdSuggestionService {
           categoryId: kpdCode.categoryId,
           isFinal: kpdCode.isFinal,
           reason: s.reason,
+          isValidation: s.isValidation,
+          isValid: s.isValid,
         });
       } else {
-        this.logger.debug(`Nevalidna šifra iz AI: ${s.code}`);
+        // Za validaciju, prikaži i nepostojeće šifre s upozorenjem
+        if (s.isValidation) {
+          this.logger.debug(`Validacija šifre ${s.code} - ne postoji u bazi`);
+          validated.push({
+            code: s.code,
+            name: s.name || 'Šifra ne postoji u KPD klasifikaciji',
+            confidence: 0,
+            level: 0,
+            categoryId: '',
+            isFinal: false,
+            reason: `UPOZORENJE: Šifra ${s.code} ne postoji u KPD 2025 klasifikaciji. ${s.reason || ''}`,
+            isValidation: true,
+            isValid: false,
+          });
+        } else {
+          this.logger.debug(`Nevalidna šifra iz AI: ${s.code}`);
+        }
       }
     }
 
@@ -218,8 +236,14 @@ export class KpdSuggestionService {
       throw new ForbiddenException('Organizacija nije pronađena');
     }
 
-    // Mjesečni limit iz subscriptiona ili default (5 za FREE)
-    const monthlyLimit = org.subscription?.monthlyQueryLimit ?? 5;
+    // Mjesečni limit iz subscriptiona, ili dohvati FREE plan iz PlanConfig
+    let monthlyLimit = org.subscription?.monthlyQueryLimit;
+    if (!monthlyLimit) {
+      const freePlan = await this.prisma.planConfig.findUnique({
+        where: { plan: 'FREE' },
+      });
+      monthlyLimit = freePlan?.monthlyQueryLimit ?? freePlan?.dailyQueryLimit ?? 0;
+    }
 
     // Odredi početak perioda za brojanje upita
     const now = new Date();
@@ -313,7 +337,7 @@ export class KpdSuggestionService {
           userId: data.userId ?? null,
           cached: data.cached,
           latencyMs: data.latencyMs,
-          aiModel: 'gemini-2.0-flash',
+          aiModel: 'gemini-2.5-flash',
         },
       });
     } catch (error) {

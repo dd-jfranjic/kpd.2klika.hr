@@ -413,20 +413,33 @@ function BillingSettingsContent() {
 
         {currentPlan !== 'FREE' && (
           <div className="kpd-settings-card__footer">
-            <button
-              onClick={handleManageSubscription}
-              disabled={actionLoading}
-              className="kpd-btn kpd-btn--secondary"
-            >
-              {actionLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <ExternalLink size={16} />
-                  Upravljaj pretplatom
-                </>
+            <div className="flex items-center justify-between w-full">
+              <button
+                onClick={handleManageSubscription}
+                disabled={actionLoading}
+                className="kpd-btn kpd-btn--secondary"
+              >
+                {actionLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <ExternalLink size={16} />
+                    Upravljaj pretplatom
+                  </>
+                )}
+              </button>
+
+              {/* Cancel link - only for active paid subscriptions */}
+              {!subscription?.cancelAtPeriodEnd && (
+                <button
+                  onClick={handleManageSubscription}
+                  disabled={actionLoading}
+                  className="kpd-text-small text-gray-500 hover:text-red-600 transition-colors underline"
+                >
+                  Otkaži pretplatu
+                </button>
               )}
-            </button>
+            </div>
           </div>
         )}
       </div>

@@ -180,6 +180,31 @@ export class AdminController {
     return result;
   }
 
+  @Post('users/:userId/reset-usage')
+  @ApiOperation({ summary: 'Resetiraj mjesečnu potrošnju korisnika' })
+  @ApiResponse({ status: 200, description: 'Potrošnja resetirana' })
+  @ApiResponse({ status: 404, description: 'Korisnik nije pronađen' })
+  async resetUserUsage(
+    @Param('userId') userId: string,
+    @CurrentUser() admin: JwtPayload,
+    @Req() req: Request,
+  ) {
+    const result = await this.adminService.resetUserUsage(userId);
+
+    // Audit log
+    await this.adminService.createAuditLog({
+      userId: admin.sub,
+      action: 'RESET_USER_USAGE',
+      entityType: 'User',
+      entityId: userId,
+      newValue: { resetUsage: true, deletedQueries: result.deletedQueries },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+
+    return { success: true, data: result };
+  }
+
   @Delete('users/:userId')
   @ApiOperation({ summary: 'Obriši korisnika trajno' })
   @ApiResponse({ status: 200, description: 'Korisnik obrisan' })
@@ -632,6 +657,78 @@ export class AdminController {
       entityType: 'System',
       entityId: 'sessions',
       newValue: { initiatedBy: user.sub },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+
+    return { success: true, data: result };
+  }
+
+  // =====================================
+  // EMAIL TEMPLATES
+  // =====================================
+
+  @Get('email-templates')
+  @ApiOperation({ summary: 'Dohvati sve email predloške' })
+  @ApiResponse({ status: 200, description: 'Lista email predložaka' })
+  async getEmailTemplates() {
+    const data = await this.adminService.getEmailTemplates();
+    return { success: true, data };
+  }
+
+  @Get('email-templates/:type')
+  @ApiOperation({ summary: 'Dohvati pojedini email predložak' })
+  @ApiResponse({ status: 200, description: 'Email predložak' })
+  async getEmailTemplate(@Param('type') type: string) {
+    const data = await this.adminService.getEmailTemplate(type);
+    if (!data) {
+      return { success: false, error: 'Template not found' };
+    }
+    return { success: true, data };
+  }
+
+  @Patch('email-templates/:type')
+  @ApiOperation({ summary: 'Ažuriraj email predložak' })
+  @ApiResponse({ status: 200, description: 'Email predložak ažuriran' })
+  async updateEmailTemplate(
+    @Param('type') type: string,
+    @Body() body: { subject?: string; content?: string; isActive?: boolean },
+    @CurrentUser() user: JwtPayload,
+    @Req() req: Request,
+  ) {
+    const result = await this.adminService.updateEmailTemplate(type, body);
+
+    // Audit log
+    await this.adminService.createAuditLog({
+      userId: user.sub,
+      action: 'UPDATE_EMAIL_TEMPLATE',
+      entityType: 'EmailTemplate',
+      entityId: type,
+      newValue: { subject: body.subject, isActive: body.isActive },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+
+    return { success: true, data: result };
+  }
+
+  @Post('email-templates/:type/reset')
+  @ApiOperation({ summary: 'Vrati email predložak na zadane vrijednosti' })
+  @ApiResponse({ status: 200, description: 'Email predložak resetiran' })
+  async resetEmailTemplate(
+    @Param('type') type: string,
+    @CurrentUser() user: JwtPayload,
+    @Req() req: Request,
+  ) {
+    const result = await this.adminService.resetEmailTemplate(type);
+
+    // Audit log
+    await this.adminService.createAuditLog({
+      userId: user.sub,
+      action: 'RESET_EMAIL_TEMPLATE',
+      entityType: 'EmailTemplate',
+      entityId: type,
+      newValue: { resetToDefault: true },
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
     });
