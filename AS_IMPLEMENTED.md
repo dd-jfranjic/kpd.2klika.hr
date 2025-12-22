@@ -2,7 +2,7 @@
 
 **Svrha**: Pracenje implementacije - sto je napravljeno, kada, i status.
 **Pocetak**: 2025-12-13 (Fresh Start)
-**Trenutna Faza**: FAZA 7 (Polish) - U tijeku (~80%)
+**Trenutna Faza**: FAZA 7 (Polish) - U tijeku (~95%)
 
 ---
 
@@ -17,7 +17,7 @@
 | 4 | KPD Tool | **ZAVRSENO** | 2025-12-13 |
 | 5 | Dashboard | **ZAVRSENO** | 2025-12-13 |
 | 6 | Admin | **ZAVRSENO** | 2025-12-13 |
-| 7 | Polish | **U TIJEKU** | ~80% |
+| 7 | Polish | **U TIJEKU** | ~95% |
 
 ---
 
@@ -582,8 +582,29 @@ fileSearch: { fileSearchStoreNames: [ragStoreId] }
 - [x] manifest.json za PWA
 - [x] FAQ page
 - [x] Security audit (npm audit - 0 vulnerabilities)
-- [ ] Stripe live mode activation
+- [x] Stripe live mode activation ✅ (2025-12-22)
+- [x] GDPR compliance module (cookie consent, privacy settings)
+- [x] Database backup system (daily automatic backups)
 - [ ] Final production testing
+
+### GDPR Implementation (2025-12-22):
+
+| Komponenta | Status | Opis |
+|------------|--------|------|
+| gdpr.module.ts | ✅ | NestJS GDPR modul |
+| gdpr.controller.ts | ✅ | REST endpoints za consent |
+| gdpr.service.ts | ✅ | Business logic |
+| cookie-consent-banner.tsx | ✅ | Frontend banner |
+| /privacy page | ✅ | Privacy policy stranica |
+| /terms page | ✅ | Terms of service |
+| /settings/privacy | ✅ | User privacy settings |
+| /admin/gdpr | ✅ | Admin GDPR dashboard |
+
+### Database Backup System (2025-12-22):
+- Backup script: `/var/www/vhosts/kpd.2klika.hr/httpdocs/backup-db.sh`
+- Daily backup: 4:00 AM (cron job)
+- Retention: 7 days
+- Storage: `/var/www/vhosts/kpd.2klika.hr/httpdocs/backups/`
 
 ---
 
