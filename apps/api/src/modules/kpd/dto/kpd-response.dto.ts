@@ -18,6 +18,8 @@ export interface KpdSearchResponse {
   cached: boolean;
   latencyMs?: number;
   remainingQueries: number;
+  blocked?: boolean;        // True ako je upit blokiran zbog content policy
+  blockedReason?: string;   // Razlog blokiranja za prikaz korisniku
 }
 
 export interface KpdCodeDetail {

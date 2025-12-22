@@ -162,7 +162,10 @@ export function AiSuggestionPanel({
           onQueryComplete(data.data.remainingQueries);
         }
 
-        if (!data.data.suggestions?.length) {
+        // Check if query was blocked by content policy
+        if (data.data.blocked) {
+          setError(data.data.blockedReason || 'Ovaj upit nije prikladan za KPD klasifikaciju. Ako smatrate da je ovo greška, javite se na kpd@2klika.hr');
+        } else if (!data.data.suggestions?.length) {
           setError('AI nije pronašao prikladne KPD šifre za ovaj artikl. Pokušajte s detaljnijim opisom. Upit vam nije oduzet jer nije bilo rezultata.');
         }
       }

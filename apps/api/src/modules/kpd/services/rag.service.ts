@@ -14,6 +14,15 @@ interface RagSuggestion {
 }
 
 /**
+ * Rezultat RAG pretrage s metapodacima
+ */
+export interface RagSearchResult {
+  suggestions: RagSuggestion[];
+  blocked: boolean;        // True ako je upit blokiran zbog content policy
+  blockedReason?: string;  // Razlog blokiranja za prikaz korisniku
+}
+
+/**
  * Konfiguracija za retry logiku i rate limiting
  */
 interface RetryConfig {
@@ -252,16 +261,20 @@ export class RagService implements OnModuleInit {
   /**
    * Pretraži KPD šifre korištenjem Gemini AI
    */
-  async searchKpd(query: string): Promise<RagSuggestion[]> {
+  async searchKpd(query: string): Promise<RagSearchResult> {
     if (!this.isReady()) {
       this.logger.warn('RAG service nije spreman, vraćam prazan rezultat');
-      return [];
+      return { suggestions: [], blocked: false };
     }
 
     // Content moderation - blokiraj eksplicitno ilegalne upite
     if (this.isExplicitlyIllegal(query)) {
       this.logger.warn(`Upit blokiran zbog content policy: "${query}"`);
-      return [];
+      return {
+        suggestions: [],
+        blocked: true,
+        blockedReason: 'Ovaj upit nije prikladan za KPD klasifikaciju. Ako smatrate da je ovo greška, javite se na kpd@2klika.hr',
+      };
     }
 
     try {
@@ -271,7 +284,8 @@ export class RagService implements OnModuleInit {
 
       const prompt = this.buildPrompt(query, queryType);
       const response = await this.queryGemini(prompt);
-      return this.parseResponse(response, queryType);
+      const suggestions = this.parseResponse(response, queryType);
+      return { suggestions, blocked: false };
     } catch (error) {
       this.logger.error(`RAG search greška za upit "${query}":`, error);
       throw error;

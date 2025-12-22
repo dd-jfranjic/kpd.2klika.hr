@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { CACHE_MANAGER, Cache } from '@nestjs/cache-manager';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { RagService } from './rag.service';
+import { RagService, RagSearchResult } from './rag.service';
 import { KpdService } from './kpd.service';
 import { KpdSuggestion, KpdSearchResponse } from '../dto';
 
@@ -92,9 +92,27 @@ export class KpdSuggestionService {
     this.logger.debug(`RAG query za: "${query}"`);
     let rawSuggestions: { code: string; name: string; confidence: number }[] =
       [];
+    let ragResult: RagSearchResult | null = null;
 
     try {
-      rawSuggestions = await this.ragService.searchKpd(query);
+      ragResult = await this.ragService.searchKpd(query);
+
+      // Ako je upit blokiran, vrati odmah s blocked flagom
+      if (ragResult.blocked) {
+        this.logger.warn(`Upit blokiran: "${query}"`);
+        const newUsageInfo = await this.checkUsageLimit(organizationId);
+        return {
+          query,
+          suggestions: [],
+          cached: false,
+          latencyMs: Date.now() - startTime,
+          remainingQueries: newUsageInfo.remainingQueries,
+          blocked: true,
+          blockedReason: ragResult.blockedReason,
+        };
+      }
+
+      rawSuggestions = ragResult.suggestions;
 
       // Ako RAG vrati prazan rezultat, pokušaj s lokalnom pretragom
       if (rawSuggestions.length === 0) {
