@@ -15,8 +15,11 @@ import {
   Building2,
   Briefcase,
   Clock,
+  Repeat,
+  Zap,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
+import { BillingToggle, type BillingType, QueryBooster, PurchaseHistory } from '@/components/billing';
 
 interface SubscriptionData {
   plan: 'FREE' | 'BASIC' | 'PRO' | 'BUSINESS' | 'ENTERPRISE';
@@ -36,6 +39,7 @@ interface PlanConfig {
   plan: 'FREE' | 'BASIC' | 'PRO' | 'BUSINESS' | 'ENTERPRISE';
   displayName: string;
   monthlyPriceEur: number;
+  oneTimePriceEur?: number | null;
   monthlyQueryLimit: number | null;
   membersLimit: number | null;
   priceId: string | null;
@@ -72,6 +76,14 @@ function BillingSettingsContent() {
   const [upgradingPlan, setUpgradingPlan] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Per-card billing type selection (Added 2025-12-19)
+  const [billingTypes, setBillingTypes] = useState<Record<string, BillingType>>({});
+
+  const getBillingType = (plan: string): BillingType => billingTypes[plan] || 'monthly';
+  const setBillingType = (plan: string, type: BillingType) => {
+    setBillingTypes(prev => ({ ...prev, [plan]: type }));
+  };
 
   // Check for success/cancel query params
   useEffect(() => {
@@ -246,6 +258,42 @@ function BillingSettingsContent() {
     }
   };
 
+  // Jednokratna kupnja plana (Added 2025-12-19)
+  const handleOneTimeCheckout = async (plan: 'BASIC' | 'PRO' | 'BUSINESS' | 'ENTERPRISE') => {
+    if (!user?.organizationId || !token) return;
+
+    setActionLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE}/stripe/checkout-onetime`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          organizationId: user.organizationId,
+          plan,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.url) {
+          window.location.href = data.url;
+        }
+      } else {
+        const errorData = await response.json();
+        setError(errorData.message || 'Greska pri kreiranju checkout sesije');
+      }
+    } catch (err) {
+      console.error('Error creating one-time checkout:', err);
+      setError('Greska pri pokretanju jednokratne kupnje');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleDateString('hr-HR', {
@@ -323,7 +371,7 @@ function BillingSettingsContent() {
             <p className="kpd-cancellation-notice__text">
               Imate pristup planu <strong>{planDisplayNames[currentPlan]}</strong> do{' '}
               <strong>{formatDate(subscription.currentPeriodEnd)}</strong>.
-              Nakon tog datuma, vaš račun prelazi na besplatni plan (KPD Starter) s ograničenjem od 5 upita mjesečno.
+              Nakon tog datuma, vaš račun prelazi na besplatni plan (KPD Starter) s ograničenjem od 3 upita mjesečno.
             </p>
             <p className="kpd-cancellation-notice__action">
               Želite nastaviti koristiti trenutni plan? Otvorite portal za upravljanje pretplatom i reaktivirajte pretplatu.
@@ -375,7 +423,7 @@ function BillingSettingsContent() {
                 Mjesečni limit upita
               </span>
               <span className="kpd-settings-info-item__value">
-                {subscription?.monthlyQueryLimit ?? 5} upita
+                {subscription?.monthlyQueryLimit ?? 3} upita
               </span>
             </div>
 
@@ -482,28 +530,58 @@ function BillingSettingsContent() {
                       <h3 className="kpd-settings-plan-card__name">
                         {plan.displayName}
                       </h3>
+
+                      {/* Billing Toggle (Added 2025-12-19) */}
+                      {!isCurrentPlan && plan.oneTimePriceEur && (
+                        <div className="my-2">
+                          <BillingToggle
+                            value={getBillingType(plan.plan)}
+                            onChange={(type) => setBillingType(plan.plan, type)}
+                            size="sm"
+                            disabled={actionLoading || upgradingPlan !== null}
+                          />
+                        </div>
+                      )}
+
                       <div className="kpd-settings-plan-card__price">
                         <span className="kpd-settings-plan-card__amount">
-                          {plan.monthlyPriceEur.toFixed(2)}
+                          {getBillingType(plan.plan) === 'onetime' && plan.oneTimePriceEur
+                            ? plan.oneTimePriceEur.toFixed(2)
+                            : plan.monthlyPriceEur.toFixed(2)}
                         </span>
                         <span className="kpd-settings-plan-card__period">
-                          EUR/mj
+                          {getBillingType(plan.plan) === 'onetime' ? 'EUR jednokratno' : 'EUR/mj'}
                         </span>
                       </div>
                     </div>
 
                     <div className="kpd-settings-plan-card__body">
                       <p className="kpd-settings-plan-card__feature">
+                        <CheckCircle2 size={14} className="inline mr-1.5 text-green-600" />
                         {plan.monthlyQueryLimit} upita mjesečno
                       </p>
                       {plan.membersLimit && (
                         <p className="kpd-settings-plan-card__feature">
+                          <CheckCircle2 size={14} className="inline mr-1.5 text-green-600" />
                           Do {plan.membersLimit} članova tima
                         </p>
                       )}
                       {!plan.membersLimit && plan.plan === 'ENTERPRISE' && (
                         <p className="kpd-settings-plan-card__feature">
+                          <CheckCircle2 size={14} className="inline mr-1.5 text-green-600" />
                           Neograničen broj članova
+                        </p>
+                      )}
+                      {/* Povijest upita - available for all paid plans */}
+                      <p className="kpd-settings-plan-card__feature">
+                        <CheckCircle2 size={14} className="inline mr-1.5 text-green-600" />
+                        Povijest upita
+                      </p>
+                      {/* CSV export - only for PRO+ */}
+                      {['PRO', 'BUSINESS', 'ENTERPRISE'].includes(plan.plan) && (
+                        <p className="kpd-settings-plan-card__feature">
+                          <CheckCircle2 size={14} className="inline mr-1.5 text-green-600" />
+                          CSV izvoz povijesti
                         </p>
                       )}
                     </div>
@@ -527,16 +605,31 @@ function BillingSettingsContent() {
                         </button>
                       ) : currentPlan === 'FREE' ? (
                         <button
-                          onClick={() => plan.priceId && handleUpgrade(plan.priceId)}
-                          disabled={actionLoading || !plan.priceId}
+                          onClick={() => {
+                            const billingType = getBillingType(plan.plan);
+                            if (billingType === 'onetime') {
+                              handleOneTimeCheckout(plan.plan as 'BASIC' | 'PRO' | 'BUSINESS' | 'ENTERPRISE');
+                            } else if (plan.priceId) {
+                              handleUpgrade(plan.priceId);
+                            }
+                          }}
+                          disabled={actionLoading || (!plan.priceId && getBillingType(plan.plan) === 'monthly')}
                           className="kpd-btn kpd-btn--primary kpd-btn--full"
                         >
                           {actionLoading ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : !plan.priceId ? (
+                          ) : !plan.priceId && getBillingType(plan.plan) === 'monthly' ? (
                             'Uskoro dostupno'
+                          ) : getBillingType(plan.plan) === 'onetime' ? (
+                            <>
+                              <Zap size={16} />
+                              Kupi jednokratno
+                            </>
                           ) : (
-                            'Nadogradi'
+                            <>
+                              <Repeat size={16} />
+                              Pretplati se
+                            </>
                           )}
                         </button>
                       ) : (
@@ -562,6 +655,23 @@ function BillingSettingsContent() {
               })}
           </div>
         </div>
+      )}
+
+      {/* Query Booster Section (Added 2025-12-19) */}
+      {user?.organizationId && token && (
+        <QueryBooster
+          organizationId={user.organizationId}
+          token={token}
+          onError={(msg) => setError(msg)}
+        />
+      )}
+
+      {/* Purchase History Section (Added 2025-12-19) */}
+      {user?.organizationId && token && (
+        <PurchaseHistory
+          organizationId={user.organizationId}
+          token={token}
+        />
       )}
 
       {/* Link to full pricing page */}

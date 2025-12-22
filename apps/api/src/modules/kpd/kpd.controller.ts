@@ -243,4 +243,70 @@ export class KpdController {
       data: result,
     };
   }
+
+  /**
+   * GET /kpd/debug/rag-stats
+   * RAG statistike za monitoring (samo SUPER_ADMIN)
+   *
+   * Pokazuje:
+   * - Ukupno zahtjeva
+   * - Uspješni/neuspješni zahtjevi
+   * - Retry statistike
+   * - Rate limit hitovi
+   * - Queue status
+   * - Prosječna latencija
+   */
+  @Get('debug/rag-stats')
+  @UseGuards(JwtAuthGuard)
+  async getRagStats(@Request() req: AuthenticatedRequest) {
+    // Dozvoli samo SUPER_ADMIN ili u development okruženju
+    if (req.user.role !== 'SUPER_ADMIN' && process.env.NODE_ENV === 'production') {
+      return {
+        success: false,
+        error: 'Pristup odbijen - potrebna SUPER_ADMIN uloga',
+      };
+    }
+
+    const stats = this.ragService.getStats();
+
+    return {
+      success: true,
+      data: {
+        rag: {
+          isReady: this.ragService.isReady(),
+          ...stats,
+          successRate: stats.totalRequests > 0
+            ? ((stats.successfulRequests / stats.totalRequests) * 100).toFixed(2) + '%'
+            : 'N/A',
+          retryRate: stats.totalRequests > 0
+            ? ((stats.retriedRequests / stats.totalRequests) * 100).toFixed(2) + '%'
+            : 'N/A',
+        },
+        timestamp: new Date().toISOString(),
+      },
+    };
+  }
+
+  /**
+   * POST /kpd/debug/rag-stats/reset
+   * Reset RAG statistika (samo SUPER_ADMIN)
+   */
+  @Post('debug/rag-stats/reset')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async resetRagStats(@Request() req: AuthenticatedRequest) {
+    if (req.user.role !== 'SUPER_ADMIN') {
+      return {
+        success: false,
+        error: 'Pristup odbijen - potrebna SUPER_ADMIN uloga',
+      };
+    }
+
+    this.ragService.resetStats();
+
+    return {
+      success: true,
+      message: 'RAG statistike resetirane',
+    };
+  }
 }

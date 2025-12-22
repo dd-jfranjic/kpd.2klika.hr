@@ -8,6 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
+import { GdprService } from '../gdpr/gdpr.service';
 import { RegisterDto, LoginResponseDto, RegisterResponseDto } from './dto';
 import { PlanType, MemberRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -26,6 +27,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private emailService: EmailService,
+    private gdprService: GdprService,
   ) {}
 
   // SECURITY: Konstante za account lockout
@@ -133,11 +135,23 @@ export class AuthService {
    * 6. Create OrganizationMember (role: OWNER)
    * 7. Create Subscription (plan: FREE)
    * 8. Create UsageRecord za tekući period
-   * 9. TODO: Send verification email
-   * 10. Return JWT token
+   * 9. Record GDPR consents
+   * 10. Send verification email
+   * 11. Return response (no token until verified)
    */
-  async register(dto: RegisterDto): Promise<RegisterResponseDto> {
+  async register(
+    dto: RegisterDto,
+    metadata?: { ipAddress?: string; userAgent?: string },
+  ): Promise<RegisterResponseDto> {
     const email = dto.email.toLowerCase();
+
+    // GDPR: Provjeri da su obavezne privole prihvaćene
+    if (!dto.termsOfService) {
+      throw new BadRequestException('Morate prihvatiti Uvjete korištenja');
+    }
+    if (!dto.privacyPolicy) {
+      throw new BadRequestException('Morate prihvatiti Politiku privatnosti');
+    }
 
     // Provjeri postoji li korisnik
     const existingUser = await this.prisma.user.findUnique({
@@ -163,14 +177,17 @@ export class AuthService {
 
     // Transakcija: kreiraj sve povezane entitete
     const result = await this.prisma.$transaction(async (tx) => {
-      // 1. Kreiraj korisnika
+      // 1. Kreiraj korisnika (s GDPR metapodacima)
       const user = await tx.user.create({
         data: {
           email,
           passwordHash,
           firstName: dto.firstName || null,
           lastName: dto.lastName || null,
-          emailVerified: false, // TODO: Email verifikacija
+          emailVerified: false,
+          // GDPR: Spremi registracijske metapodatke
+          registrationIp: metadata?.ipAddress || null,
+          registrationAgent: metadata?.userAgent || null,
         },
       });
 
@@ -224,6 +241,20 @@ export class AuthService {
 
       return { user, organization };
     });
+
+    // GDPR: Zabilježi privole u audit trail
+    await this.gdprService.recordRegistrationConsents(
+      result.user.id,
+      {
+        termsOfService: dto.termsOfService,
+        privacyPolicy: dto.privacyPolicy,
+        marketingEmails: dto.marketingEmails,
+      },
+      {
+        ipAddress: metadata?.ipAddress,
+        userAgent: metadata?.userAgent,
+      },
+    );
 
     // Pošalji verification email
     await this.sendVerificationEmail(result.user.id, result.user.email, result.user.firstName);

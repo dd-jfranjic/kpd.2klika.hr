@@ -787,6 +787,148 @@
 }
 
 /* -----------------------------------------------------------------------------
+   GDPR CHECKBOX
+   ----------------------------------------------------------------------------- */
+.gdprCheckbox {
+  margin-top: 0.75rem;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.checkboxCustom {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  border: 2px solid rgba(107, 155, 118, 0.4);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  background: var(--color-cream);
+  margin-top: 1px;
+}
+
+.checkboxCustom svg {
+  width: 14px;
+  height: 14px;
+  stroke: white;
+  stroke-width: 3;
+  fill: none;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all var(--transition-fast);
+}
+
+.checkbox:checked + .checkboxCustom {
+  background: var(--color-sage);
+  border-color: var(--color-sage);
+}
+
+.checkbox:checked + .checkboxCustom svg {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.checkbox:focus + .checkboxCustom {
+  box-shadow: 0 0 0 3px rgba(107, 155, 118, 0.2);
+}
+
+.checkboxLabel:hover .checkboxCustom {
+  border-color: var(--color-sage);
+}
+
+.checkboxText {
+  font-size: 0.8125rem;
+  color: var(--color-charcoal-light);
+  line-height: 1.5;
+}
+
+.checkboxText a {
+  color: var(--color-sage);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.checkboxText a:hover {
+  text-decoration: underline;
+}
+
+/* -----------------------------------------------------------------------------
+   GDPR CONSENT SECTION
+   ----------------------------------------------------------------------------- */
+.gdprSection {
+  margin-top: 0.75rem;
+  padding: 1rem;
+  background: rgba(107, 155, 118, 0.05);
+  border: 1px solid rgba(107, 155, 118, 0.15);
+  border-radius: var(--radius-md);
+}
+
+.gdprSection .gdprCheckbox {
+  margin-top: 0.625rem;
+}
+
+.gdprSection .gdprCheckbox:first-of-type {
+  margin-top: 0.75rem;
+}
+
+.gdprTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-charcoal);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gdprTitle::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 14px;
+  background: var(--color-sage);
+  border-radius: 2px;
+}
+
+.required {
+  color: var(--color-error);
+  font-weight: 600;
+  margin-left: 0.125rem;
+}
+
+.optional {
+  font-size: 0.75rem;
+  color: var(--color-warm-gray);
+  font-style: italic;
+  font-weight: 400;
+}
+
+.gdprNote {
+  margin-top: 0.75rem;
+  margin-bottom: 0;
+  font-size: 0.75rem;
+  color: var(--color-charcoal-light);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* -----------------------------------------------------------------------------
    RESPONSIVE ADJUSTMENTS
    ----------------------------------------------------------------------------- */
 @media (max-width: 480px) {

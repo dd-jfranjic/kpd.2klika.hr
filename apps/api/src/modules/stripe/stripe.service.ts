@@ -2,7 +2,7 @@ import { Injectable, Logger, BadRequestException, NotFoundException } from '@nes
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { PrismaService } from '../../prisma/prisma.service';
-import { PlanType, SubscriptionStatus } from '@prisma/client';
+import { PlanType, SubscriptionStatus, PurchaseType } from '@prisma/client';
 
 @Injectable()
 export class StripeService {
@@ -29,10 +29,17 @@ export class StripeService {
     this.appUrl = this.config.get<string>('APP_URL') || 'https://kpd.2klika.hr';
 
     this.priceIds = {
+      // Monthly subscription prices
       BASIC: this.config.get<string>('STRIPE_PRICE_BASIC') || '',
       PRO: this.config.get<string>('STRIPE_PRICE_PRO') || '',
       BUSINESS: this.config.get<string>('STRIPE_PRICE_BUSINESS') || '',
       ENTERPRISE: this.config.get<string>('STRIPE_PRICE_ENTERPRISE') || '',
+      // One-time payment prices (Added 2025-12-19)
+      BASIC_ONETIME: this.config.get<string>('STRIPE_PRICE_BASIC_ONETIME') || '',
+      PRO_ONETIME: this.config.get<string>('STRIPE_PRICE_PRO_ONETIME') || '',
+      BUSINESS_ONETIME: this.config.get<string>('STRIPE_PRICE_BUSINESS_ONETIME') || '',
+      ENTERPRISE_ONETIME: this.config.get<string>('STRIPE_PRICE_ENTERPRISE_ONETIME') || '',
+      QUERY_BOOSTER: this.config.get<string>('STRIPE_PRICE_QUERY_BOOSTER') || '',
     };
   }
 
@@ -366,6 +373,225 @@ export class StripeService {
   }
 
   // ============================================
+  // ONE-TIME PAYMENTS (Added 2025-12-19)
+  // ============================================
+
+  /**
+   * Kreiraj Stripe Checkout Session za jednokratnu kupnju paketa
+   */
+  async createOneTimeCheckoutSession(
+    organizationId: string,
+    plan: PlanType,
+    successUrl?: string,
+    cancelUrl?: string,
+  ): Promise<{ url: string }> {
+    const customerId = await this.getOrCreateCustomer(organizationId);
+
+    // Dohvati one-time price ID za plan
+    const priceId = this.getOneTimePriceId(plan);
+    if (!priceId) {
+      throw new BadRequestException(`Jednokratna kupnja nije dostupna za plan ${plan}`);
+    }
+
+    // Dohvati plan config za metadata
+    const planConfig = await this.prisma.planConfig.findUnique({
+      where: { plan },
+    });
+
+    if (!planConfig) {
+      throw new BadRequestException(`Plan ${plan} nije pronađen`);
+    }
+
+    const session = await this.stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'payment',  // ONE-TIME payment
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      success_url: successUrl || `${this.appUrl}/settings/billing?success=true&type=onetime`,
+      cancel_url: cancelUrl || `${this.appUrl}/settings/billing?canceled=true`,
+      metadata: {
+        organizationId,
+        purchaseType: 'ONE_TIME_PLAN',
+        plan,
+        queriesIncluded: String(planConfig.monthlyQueryLimit || 0),
+      },
+      allow_promotion_codes: true,
+      billing_address_collection: 'required',
+      tax_id_collection: {
+        enabled: true,
+      },
+      customer_update: {
+        name: 'auto',
+        address: 'auto',
+      },
+    });
+
+    if (!session.url) {
+      throw new BadRequestException('Nije moguće kreirati checkout session');
+    }
+
+    // Kreiraj Purchase record u PENDING stanju
+    await this.prisma.purchase.create({
+      data: {
+        organizationId,
+        stripeCheckoutSessionId: session.id,
+        productType: 'ONE_TIME_PLAN',
+        productName: planConfig.displayName,
+        priceEur: planConfig.oneTimePriceEur || planConfig.monthlyPriceEur,
+        queriesIncluded: planConfig.monthlyQueryLimit || 0,
+        status: 'PENDING',
+      },
+    });
+
+    this.logger.log(`Kreiran One-Time Checkout Session za organizaciju ${organizationId}, plan: ${plan}`);
+
+    return { url: session.url };
+  }
+
+  /**
+   * Kupi Query Booster (10 upita za 6.99€)
+   */
+  async purchaseQueryBooster(
+    organizationId: string,
+    successUrl?: string,
+    cancelUrl?: string,
+  ): Promise<{ url: string }> {
+    const customerId = await this.getOrCreateCustomer(organizationId);
+
+    const priceId = this.priceIds.QUERY_BOOSTER;
+    if (!priceId) {
+      throw new BadRequestException('Query Booster nije konfiguriran');
+    }
+
+    const session = await this.stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      success_url: successUrl || `${this.appUrl}/settings/billing?success=true&type=booster`,
+      cancel_url: cancelUrl || `${this.appUrl}/settings/billing?canceled=true`,
+      metadata: {
+        organizationId,
+        purchaseType: 'QUERY_BOOSTER',
+        queriesIncluded: '10',
+      },
+      allow_promotion_codes: true,
+      billing_address_collection: 'required',
+      tax_id_collection: {
+        enabled: true,
+      },
+      customer_update: {
+        name: 'auto',
+        address: 'auto',
+      },
+    });
+
+    if (!session.url) {
+      throw new BadRequestException('Nije moguće kreirati checkout session');
+    }
+
+    // Kreiraj Purchase record u PENDING stanju
+    await this.prisma.purchase.create({
+      data: {
+        organizationId,
+        stripeCheckoutSessionId: session.id,
+        productType: 'QUERY_BOOSTER',
+        productName: 'KPD Query Booster',
+        priceEur: 6.99,
+        queriesIncluded: 10,
+        status: 'PENDING',
+      },
+    });
+
+    this.logger.log(`Kreiran Query Booster Checkout Session za organizaciju ${organizationId}`);
+
+    return { url: session.url };
+  }
+
+  /**
+   * Dohvati povijest kupnji za organizaciju
+   */
+  async getPurchaseHistory(organizationId: string) {
+    return this.prisma.purchase.findMany({
+      where: { organizationId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Admin: Dodaj bonus upite organizaciji (besplatno)
+   */
+  async grantBonusQueries(
+    organizationId: string,
+    queriesCount: number,
+    reason?: string,
+  ): Promise<{ success: boolean; newBonusTotal: number }> {
+    // Dohvati subscription
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { organizationId },
+    });
+
+    if (!subscription) {
+      throw new NotFoundException('Subscription nije pronađen');
+    }
+
+    // Ažuriraj bonusQueryQuota
+    const newTotal = subscription.bonusQueryQuota + queriesCount;
+    await this.prisma.subscription.update({
+      where: { organizationId },
+      data: { bonusQueryQuota: newTotal },
+    });
+
+    // Kreiraj Purchase record za audit trail
+    await this.prisma.purchase.create({
+      data: {
+        organizationId,
+        productType: 'MANUAL_GRANT',
+        productName: `Admin Grant: ${queriesCount} upita`,
+        priceEur: 0,
+        queriesIncluded: queriesCount,
+        status: 'COMPLETED',
+        purchasedAt: new Date(),
+      },
+    });
+
+    this.logger.log(`Admin dodijelio ${queriesCount} bonus upita organizaciji ${organizationId}. Razlog: ${reason || 'N/A'}`);
+
+    return {
+      success: true,
+      newBonusTotal: newTotal,
+    };
+  }
+
+  /**
+   * Dohvati one-time price ID za plan
+   */
+  private getOneTimePriceId(plan: PlanType): string | null {
+    switch (plan) {
+      case 'BASIC':
+        return this.priceIds.BASIC_ONETIME || null;
+      case 'PRO':
+        return this.priceIds.PRO_ONETIME || null;
+      case 'BUSINESS':
+        return this.priceIds.BUSINESS_ONETIME || null;
+      case 'ENTERPRISE':
+        return this.priceIds.ENTERPRISE_ONETIME || null;
+      default:
+        return null;
+    }
+  }
+
+  // ============================================
   // WEBHOOK HANDLERS
   // ============================================
 
@@ -376,6 +602,10 @@ export class StripeService {
     this.logger.log(`Obrada webhook eventa: ${event.type}`);
 
     switch (event.type) {
+      case 'checkout.session.completed':
+        await this.handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+        break;
+
       case 'customer.subscription.created':
         await this.handleSubscriptionCreated(event.data.object as Stripe.Subscription);
         break;
@@ -403,6 +633,132 @@ export class StripeService {
       default:
         this.logger.debug(`Neobradeni webhook event: ${event.type}`);
     }
+  }
+
+  /**
+   * Handler: Checkout Session Completed
+   * Ovo je prvi event koji se šalje kad korisnik završi checkout
+   * Podržava i subscription i one-time payment mode
+   */
+  private async handleCheckoutCompleted(session: Stripe.Checkout.Session): Promise<void> {
+    const organizationId = session.metadata?.organizationId;
+
+    if (!organizationId) {
+      this.logger.error('Checkout session bez organizationId metadata');
+      return;
+    }
+
+    // Provjeri je li ovo one-time payment ili subscription
+    if (session.mode === 'payment') {
+      // ONE-TIME PAYMENT
+      await this.handleOneTimePaymentCompleted(session);
+      return;
+    }
+
+    // SUBSCRIPTION MODE
+    const subscriptionId = session.subscription as string;
+    if (!subscriptionId) {
+      this.logger.warn('Checkout session bez subscription ID (možda nije subscription mode)');
+      return;
+    }
+
+    this.logger.log(`Checkout completed za organizaciju ${organizationId}, subscription: ${subscriptionId}`);
+
+    // Dohvati punu subscription informaciju iz Stripea
+    const subscription = await this.stripe.subscriptions.retrieve(subscriptionId);
+
+    // Koristi isti handler za kreiranje/update
+    await this.handleSubscriptionCreated({
+      ...subscription,
+      metadata: { ...subscription.metadata, organizationId },
+    });
+
+    this.logger.log(`Checkout session uspješno obrađen za organizaciju ${organizationId}`);
+  }
+
+  /**
+   * Handler: One-Time Payment Completed (Added 2025-12-19)
+   */
+  private async handleOneTimePaymentCompleted(session: Stripe.Checkout.Session): Promise<void> {
+    const organizationId = session.metadata?.organizationId;
+    const purchaseType = session.metadata?.purchaseType as PurchaseType;
+    const queriesIncluded = parseInt(session.metadata?.queriesIncluded || '0', 10);
+    const plan = session.metadata?.plan as PlanType | undefined;
+
+    if (!organizationId) {
+      this.logger.error('One-time payment bez organizationId metadata');
+      return;
+    }
+
+    this.logger.log(`One-Time Payment completed za organizaciju ${organizationId}, tip: ${purchaseType}`);
+
+    // Dohvati payment intent za detaljne informacije
+    const paymentIntentId = session.payment_intent as string;
+
+    // Ažuriraj Purchase record
+    const purchase = await this.prisma.purchase.findFirst({
+      where: { stripeCheckoutSessionId: session.id },
+    });
+
+    if (purchase) {
+      await this.prisma.purchase.update({
+        where: { id: purchase.id },
+        data: {
+          stripePaymentIntentId: paymentIntentId,
+          status: 'COMPLETED',
+          purchasedAt: new Date(),
+        },
+      });
+    }
+
+    // Dohvati ili kreiraj subscription
+    let subscription = await this.prisma.subscription.findUnique({
+      where: { organizationId },
+    });
+
+    if (!subscription) {
+      // Kreiraj FREE subscription ako ne postoji
+      const freePlan = await this.prisma.planConfig.findUnique({
+        where: { plan: 'FREE' },
+      });
+      subscription = await this.prisma.subscription.create({
+        data: {
+          organizationId,
+          plan: 'FREE',
+          status: 'ACTIVE',
+          dailyQueryLimit: freePlan?.dailyQueryLimit ?? 0,
+          monthlyQueryLimit: freePlan?.monthlyQueryLimit ?? 0,
+          bonusQueryQuota: 0,
+        },
+      });
+    }
+
+    if (purchaseType === 'QUERY_BOOSTER') {
+      // Query Booster - dodaj 10 upita u bonusQueryQuota
+      await this.prisma.subscription.update({
+        where: { organizationId },
+        data: {
+          bonusQueryQuota: subscription.bonusQueryQuota + queriesIncluded,
+        },
+      });
+      this.logger.log(`Dodano ${queriesIncluded} bonus upita za organizaciju ${organizationId}`);
+    } else if (purchaseType === 'ONE_TIME_PLAN' && plan) {
+      // One-time plan purchase - dodaj upite u bonusQueryQuota
+      const planConfig = await this.prisma.planConfig.findUnique({
+        where: { plan },
+      });
+      const queries = planConfig?.monthlyQueryLimit || queriesIncluded;
+
+      await this.prisma.subscription.update({
+        where: { organizationId },
+        data: {
+          bonusQueryQuota: subscription.bonusQueryQuota + queries,
+        },
+      });
+      this.logger.log(`Dodano ${queries} bonus upita (plan ${plan}) za organizaciju ${organizationId}`);
+    }
+
+    this.logger.log(`One-time payment uspješno obrađen za organizaciju ${organizationId}`);
   }
 
   /**

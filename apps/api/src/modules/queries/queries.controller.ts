@@ -4,10 +4,8 @@ import {
   Delete,
   Param,
   Query,
-  Res,
   UseGuards,
 } from '@nestjs/common';
-import { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -65,16 +63,17 @@ export class QueriesController {
 
   /**
    * Eksportaj upite u CSV
+   * NAPOMENA: Dostupno samo za PRO, BUSINESS i ENTERPRISE planove
    */
   @Get('export')
-  @ApiOperation({ summary: 'Eksportaj upite u CSV' })
+  @ApiOperation({ summary: 'Eksportaj upite u CSV (PRO+ planovi)' })
   @ApiQuery({ name: 'search', required: false, type: String })
   @ApiQuery({ name: 'startDate', required: false, type: String })
   @ApiQuery({ name: 'endDate', required: false, type: String })
-  @ApiResponse({ status: 200, description: 'CSV datoteka' })
+  @ApiResponse({ status: 200, description: 'CSV podaci u JSON formatu' })
+  @ApiResponse({ status: 403, description: 'PRO+ plan potreban za ovu funkcionalnost' })
   async exportQueries(
     @CurrentUser() user: JwtPayload,
-    @Res() res: Response,
     @Query('search') search?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
@@ -85,12 +84,14 @@ export class QueriesController {
       endDate,
     });
 
-    res.setHeader('Content-Type', `${result.mimeType}; charset=utf-8`);
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${result.filename}"`,
-    );
-    res.send('\ufeff' + result.content); // BOM for Excel UTF-8 compatibility
+    return {
+      success: true,
+      data: {
+        filename: result.filename,
+        content: result.content,
+        mimeType: result.mimeType,
+      },
+    };
   }
 
   /**

@@ -16,10 +16,11 @@ import {
   User,
   FileText,
   ExternalLink,
+  Home,
 } from 'lucide-react';
 
 // App version - update this with each release
-const APP_VERSION = 'v1.0.0';
+const APP_VERSION = 'v1.3.0';
 import { useState, useRef, useEffect } from 'react';
 
 // User menu items - organized by sections
@@ -114,6 +115,10 @@ export function UserSidebar() {
         <div className="kpd-user-sidebar__version">
           <span className="kpd-user-sidebar__version-badge">{APP_VERSION}</span>
         </div>
+        <Link href="/" className="kpd-user-sidebar__info-link">
+          <Home className="w-3.5 h-3.5" />
+          Početna stranica
+        </Link>
         <Link href="/changelog" className="kpd-user-sidebar__info-link">
           <FileText className="w-3.5 h-3.5" />
           Changelog

@@ -108,12 +108,23 @@ export default function AdminDashboardPage() {
 
         // Generate alerts based on stats
         const newAlerts: Alert[] = [];
+        // Users who reached/exceeded limit (100%+) - CRITICAL
+        if (statsData.data?.usersAtLimit > 0) {
+          newAlerts.push({
+            id: 'users-at-limit',
+            type: 'error',
+            title: `${statsData.data.usersAtLimit} korisnika doseglo limit`,
+            message: 'Korisnici koji su iskoristili 100% mjesečnog limita upita',
+            link: '/admin/users?filter=at_limit',
+          });
+        }
+        // Users near limit (80-99%) - WARNING
         if (statsData.data?.usersNearLimit > 0) {
           newAlerts.push({
             id: 'users-near-limit',
             type: 'warning',
             title: `${statsData.data.usersNearLimit} korisnika blizu limita`,
-            message: 'Korisnici koji su iskoristili 80%+ upita ovaj mjesec',
+            message: 'Korisnici koji su iskoristili 80-99% mjesečnog limita upita',
             link: '/admin/users?filter=near_limit',
           });
         }

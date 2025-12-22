@@ -68,7 +68,7 @@ export function MobileNav() {
             </div>
             <div>
               <span className="font-semibold text-gray-900 block text-sm">AI KPD Klasifikator</span>
-              <span className="text-xs text-gray-500">asistent by 2klika</span>
+              <span className="text-xs text-gray-500">created by 2klika</span>
             </div>
           </Link>
           <Button

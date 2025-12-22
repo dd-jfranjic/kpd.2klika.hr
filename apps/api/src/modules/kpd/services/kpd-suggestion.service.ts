@@ -29,7 +29,7 @@ interface UsageInfo {
 @Injectable()
 export class KpdSuggestionService {
   private readonly logger = new Logger(KpdSuggestionService.name);
-  private readonly CACHE_TTL = 3600000; // 1 sat u ms
+  private readonly CACHE_TTL = 86400000; // 24 sata u ms - KPD šifre su statične
 
   constructor(
     private prisma: PrismaService,
@@ -327,6 +327,33 @@ export class KpdSuggestionService {
       const topSuggestion = data.suggestions[0];
       const suggestedCodes = data.suggestions.map((s) => s.code);
 
+      // Dohvati sector iz kategorije za svaki prijedlog
+      const suggestionsData = await Promise.all(
+        data.suggestions.map(async (s) => {
+          let sectorName: string | null = null;
+          if (s.categoryId) {
+            const category = await this.prisma.kpdCategory.findUnique({
+              where: { id: s.categoryId },
+            });
+            if (category?.name) {
+              sectorName = category.name;
+            }
+          }
+          return {
+            code: s.code,
+            name: s.name,
+            confidence: s.confidence,
+            reason: s.reason || null,
+            sector: sectorName,
+            level: s.level,
+            isFinal: s.isFinal,
+          };
+        }),
+      );
+
+      // Sector za prvi prijedlog (za backward compatibility)
+      const sector = suggestionsData[0]?.sector || null;
+
       await this.prisma.query.create({
         data: {
           inputText: data.query,
@@ -338,6 +365,9 @@ export class KpdSuggestionService {
           cached: data.cached,
           latencyMs: data.latencyMs,
           aiModel: 'gemini-2.5-flash',
+          explanation: topSuggestion?.reason ?? null,
+          sector: sector,
+          suggestionsData: suggestionsData,
         },
       });
     } catch (error) {

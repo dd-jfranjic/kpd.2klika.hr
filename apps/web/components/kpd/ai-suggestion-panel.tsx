@@ -457,6 +457,14 @@ export function AiSuggestionPanel({
                 </div>
               ))}
             </div>
+
+            {/* Disclaimer */}
+            <div className="flex items-start gap-2 p-3 bg-amber-50/50 border border-amber-100 rounded-lg mt-3">
+              <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-700">
+                <span className="font-medium">Napomena:</span> Ovi prijedlozi su generirani umjetnom inteligencijom i služe kao pomoć pri odabiru. Provjerite točnost šifre prije korištenja na eRačunu.
+              </p>
+            </div>
           </div>
         )}
 

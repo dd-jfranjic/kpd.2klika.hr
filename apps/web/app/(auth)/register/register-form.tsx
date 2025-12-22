@@ -23,6 +23,10 @@ export default function RegisterForm() {
     password: '',
     confirmPassword: '',
   });
+  // GDPR Consent states - separate for compliance audit trail
+  const [termsOfService, setTermsOfService] = useState(false);
+  const [privacyPolicy, setPrivacyPolicy] = useState(false);
+  const [marketingEmails, setMarketingEmails] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -73,8 +77,18 @@ export default function RegisterForm() {
     if (!/\d/.test(formData.password)) {
       return 'Lozinka mora sadržavati broj';
     }
+    if (!/[@$!%*?&]/.test(formData.password)) {
+      return 'Lozinka mora sadržavati specijalni znak (@$!%*?&)';
+    }
     if (formData.password !== formData.confirmPassword) {
       return 'Lozinke se ne podudaraju';
+    }
+    // GDPR consent validation - both required
+    if (!termsOfService) {
+      return 'Morate prihvatiti Uvjete korištenja';
+    }
+    if (!privacyPolicy) {
+      return 'Morate prihvatiti Politiku privatnosti';
     }
     return null;
   };
@@ -96,7 +110,13 @@ export default function RegisterForm() {
         formData.email,
         formData.password,
         formData.name.split(' ')[0],
-        formData.name.split(' ').slice(1).join(' ') || undefined
+        formData.name.split(' ').slice(1).join(' ') || undefined,
+        // GDPR consents - passed to backend for audit trail
+        {
+          termsOfService,
+          privacyPolicy,
+          marketingEmails: marketingEmails || undefined,
+        }
       );
 
       if (result?.requiresVerification) {
@@ -239,7 +259,7 @@ export default function RegisterForm() {
             </div>
             <div className={styles.featureContent}>
               <h3>Besplatno probno razdoblje</h3>
-              <p>5 besplatnih AI upita za testiranje</p>
+              <p>3 besplatna AI upita za testiranje</p>
             </div>
           </div>
         </div>
@@ -460,7 +480,85 @@ export default function RegisterForm() {
                   </svg>
                   <span>Jedan broj</span>
                 </div>
+                <div className={`${styles.requirement} ${formData.password && /[@$!%*?&]/.test(formData.password) ? styles.met : ''}`}>
+                  <svg viewBox="0 0 24 24">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span>Jedan specijalni znak (@$!%*?&)</span>
+                </div>
               </div>
+            </div>
+
+            {/* GDPR Consent Section */}
+            <div className={styles.gdprSection}>
+              <h4 className={styles.gdprTitle}>Privole (GDPR)</h4>
+
+              {/* Terms of Service - Required */}
+              <div className={styles.gdprCheckbox}>
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={termsOfService}
+                    onChange={(e) => setTermsOfService(e.target.checked)}
+                    className={styles.checkbox}
+                    disabled={loading}
+                  />
+                  <span className={styles.checkboxCustom}>
+                    <svg viewBox="0 0 24 24">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </span>
+                  <span className={styles.checkboxText}>
+                    Prihvaćam <Link href="/terms">Uvjete korištenja</Link> <span className={styles.required}>*</span>
+                  </span>
+                </label>
+              </div>
+
+              {/* Privacy Policy - Required */}
+              <div className={styles.gdprCheckbox}>
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={privacyPolicy}
+                    onChange={(e) => setPrivacyPolicy(e.target.checked)}
+                    className={styles.checkbox}
+                    disabled={loading}
+                  />
+                  <span className={styles.checkboxCustom}>
+                    <svg viewBox="0 0 24 24">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </span>
+                  <span className={styles.checkboxText}>
+                    Prihvaćam <Link href="/privacy">Politiku privatnosti</Link> <span className={styles.required}>*</span>
+                  </span>
+                </label>
+              </div>
+
+              {/* Marketing Emails - Optional */}
+              <div className={styles.gdprCheckbox}>
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={marketingEmails}
+                    onChange={(e) => setMarketingEmails(e.target.checked)}
+                    className={styles.checkbox}
+                    disabled={loading}
+                  />
+                  <span className={styles.checkboxCustom}>
+                    <svg viewBox="0 0 24 24">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </span>
+                  <span className={styles.checkboxText}>
+                    Želim primati marketinške obavijesti i novosti <span className={styles.optional}>(opcionalno)</span>
+                  </span>
+                </label>
+              </div>
+
+              <p className={styles.gdprNote}>
+                <span className={styles.required}>*</span> Obavezna polja
+              </p>
             </div>
 
             {/* Submit Button */}
@@ -482,14 +580,6 @@ export default function RegisterForm() {
               )}
             </button>
           </form>
-
-          {/* Terms */}
-          <p className={styles.termsText}>
-            Registracijom prihvaćate naše{' '}
-            <Link href="/terms">Uvjete korištenja</Link>{' '}
-            i{' '}
-            <Link href="/privacy">Politiku privatnosti</Link>.
-          </p>
 
           {/* Trust Badges */}
           <div className={styles.trustBadges}>

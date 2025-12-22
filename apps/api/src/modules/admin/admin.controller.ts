@@ -77,6 +77,7 @@ export class AdminController {
     @Query('limit') limit?: string,
     @Query('suspended') suspended?: string,
     @Query('nearLimit') nearLimit?: string,
+    @Query('atLimit') atLimit?: string,
     @Query('plan') plan?: string,
   ) {
     const data = await this.adminService.getUsers({
@@ -85,6 +86,7 @@ export class AdminController {
       limit: limit ? parseInt(limit, 10) : undefined,
       suspended: suspended !== undefined ? suspended === 'true' : undefined,
       nearLimit: nearLimit === 'true',
+      atLimit: atLimit === 'true',
       plan,
     });
     return { success: true, data };
@@ -197,7 +199,84 @@ export class AdminController {
       action: 'RESET_USER_USAGE',
       entityType: 'User',
       entityId: userId,
-      newValue: { resetUsage: true, deletedQueries: result.deletedQueries },
+      newValue: { resetUsage: true, resetQueries: result.resetQueries },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+
+    return { success: true, data: result };
+  }
+
+  @Post('users/:userId/add-credits')
+  @ApiOperation({ summary: 'Dodaj bonus kredite korisniku' })
+  @ApiResponse({ status: 200, description: 'Krediti dodani' })
+  @ApiResponse({ status: 404, description: 'Korisnik nije pronađen' })
+  async addUserCredits(
+    @Param('userId') userId: string,
+    @Body('amount') amount: number,
+    @Body('reason') reason: string,
+    @CurrentUser() admin: JwtPayload,
+    @Req() req: Request,
+  ) {
+    if (!amount || amount <= 0 || amount > 1000) {
+      throw new BadRequestException('Količina kredita mora biti između 1 i 1000');
+    }
+
+    const result = await this.adminService.addUserCredits(userId, amount);
+
+    // Audit log with full details
+    await this.adminService.createAuditLog({
+      userId: admin.sub,
+      action: 'ADD_USER_CREDITS',
+      entityType: 'User',
+      entityId: userId,
+      oldValue: { previousLimit: result.previousLimit },
+      newValue: {
+        creditsAdded: amount,
+        newLimit: result.newLimit,
+        reason: reason || 'Admin bonus',
+        organizationId: result.organizationId,
+      },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+
+    return { success: true, data: result };
+  }
+
+  @Post('users/:userId/change-plan')
+  @ApiOperation({ summary: 'Promijeni plan korisnika' })
+  @ApiResponse({ status: 200, description: 'Plan promijenjen' })
+  @ApiResponse({ status: 404, description: 'Korisnik nije pronađen' })
+  async changeUserPlan(
+    @Param('userId') userId: string,
+    @Body('plan') plan: string,
+    @Body('reason') reason: string,
+    @Body('resetUsage') resetUsage: boolean,
+    @CurrentUser() admin: JwtPayload,
+    @Req() req: Request,
+  ) {
+    const validPlans = ['FREE', 'BASIC', 'PRO', 'BUSINESS', 'ENTERPRISE'];
+    if (!plan || !validPlans.includes(plan)) {
+      throw new BadRequestException('Nevažeći plan. Dozvoljeni: ' + validPlans.join(', '));
+    }
+
+    const result = await this.adminService.changeUserPlan(userId, plan, resetUsage === true);
+
+    // Audit log with full details
+    await this.adminService.createAuditLog({
+      userId: admin.sub,
+      action: 'CHANGE_USER_PLAN',
+      entityType: 'User',
+      entityId: userId,
+      oldValue: { previousPlan: result.previousPlan, previousLimit: result.previousLimit },
+      newValue: {
+        newPlan: plan,
+        newLimit: result.newLimit,
+        reason: reason || 'Admin manual change',
+        organizationId: result.organizationId,
+        usageReset: result.usageReset || false,
+      },
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
     });

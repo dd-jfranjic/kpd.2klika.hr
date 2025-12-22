@@ -22,6 +22,8 @@ import {
   Edit,
   Gift,
   XCircle,
+  X,
+  Check,
 } from 'lucide-react';
 import { PlanBadge, StatusIndicator, UsageProgressBar } from '@/components/admin';
 
@@ -87,6 +89,17 @@ export default function UserDetailPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [impersonateError, setImpersonateError] = useState<string | null>(null);
+
+  // Modal states
+  const [showAddCreditsModal, setShowAddCreditsModal] = useState(false);
+  const [showChangePlanModal, setShowChangePlanModal] = useState(false);
+  const [creditsAmount, setCreditsAmount] = useState<number>(10);
+  const [creditsReason, setCreditsReason] = useState('');
+  const [selectedPlan, setSelectedPlan] = useState('');
+  const [planReason, setPlanReason] = useState('');
+  const [resetUsageOnPlanChange, setResetUsageOnPlanChange] = useState(true);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [modalSuccess, setModalSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && (!user || !isAdmin)) {
@@ -175,6 +188,80 @@ export default function UserDetailPage() {
     }
     setActionLoading(null);
   };
+
+  const handleAddCredits = async () => {
+    if (!token || !creditsAmount || creditsAmount <= 0) {
+      setModalError('Unesite valjan broj kredita');
+      return;
+    }
+    setActionLoading('addCredits');
+    setModalError(null);
+    setModalSuccess(null);
+    try {
+      const res = await fetch(`/api/v1/admin/users/${userId}/add-credits`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        credentials: 'include',
+        body: JSON.stringify({ amount: creditsAmount, reason: creditsReason }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setModalSuccess(`Dodano ${creditsAmount} kredita. Novi limit: ${data.data?.newLimit || 'N/A'}`);
+        setCreditsAmount(10);
+        setCreditsReason('');
+        fetchUserDetail();
+        setTimeout(() => {
+          setShowAddCreditsModal(false);
+          setModalSuccess(null);
+        }, 2000);
+      } else {
+        setModalError(data.message || 'Greška pri dodavanju kredita');
+      }
+    } catch (error) {
+      console.error('Error adding credits:', error);
+      setModalError('Greška pri dodavanju kredita');
+    }
+    setActionLoading(null);
+  };
+
+  const handleChangePlan = async () => {
+    if (!token || !selectedPlan) {
+      setModalError('Odaberite plan');
+      return;
+    }
+    setActionLoading('changePlan');
+    setModalError(null);
+    setModalSuccess(null);
+    try {
+      const res = await fetch(`/api/v1/admin/users/${userId}/change-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        credentials: 'include',
+        body: JSON.stringify({ plan: selectedPlan, reason: planReason, resetUsage: resetUsageOnPlanChange }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setModalSuccess(`Plan promijenjen na ${selectedPlan}. Novi limit: ${data.data?.newLimit || 'N/A'}`);
+        setSelectedPlan('');
+        setPlanReason('');
+        fetchUserDetail();
+        setTimeout(() => {
+          setShowChangePlanModal(false);
+          setModalSuccess(null);
+        }, 2000);
+      } else {
+        setModalError(data.message || 'Greška pri promjeni plana');
+      }
+    } catch (error) {
+      console.error('Error changing plan:', error);
+      setModalError('Greška pri promjeni plana');
+    }
+    setActionLoading(null);
+  };
+
+  const availablePlans = ['FREE', 'BASIC', 'PRO', 'BUSINESS', 'ENTERPRISE'];
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-';
@@ -417,11 +504,29 @@ export default function UserDetailPage() {
                   </div>
                 </dl>
                 <div className="flex flex-wrap gap-2 pt-2">
-                  <button className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100">
+                  <button
+                    onClick={() => {
+                      setModalError(null);
+                      setModalSuccess(null);
+                      setSelectedPlan(userData.subscription?.plan || 'FREE');
+                      setPlanReason('');
+                      setShowChangePlanModal(true);
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100"
+                  >
                     <RefreshCw className="w-3 h-3" />
                     Promijeni plan
                   </button>
-                  <button className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-green-50 text-green-700 rounded-lg hover:bg-green-100">
+                  <button
+                    onClick={() => {
+                      setModalError(null);
+                      setModalSuccess(null);
+                      setCreditsAmount(10);
+                      setCreditsReason('');
+                      setShowAddCreditsModal(true);
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-green-50 text-green-700 rounded-lg hover:bg-green-100"
+                  >
                     <Gift className="w-3 h-3" />
                     Dodaj kredite
                   </button>
@@ -573,6 +678,227 @@ export default function UserDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Add Credits Modal */}
+      {showAddCreditsModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <Gift className="w-5 h-5 text-green-600" />
+                Dodaj kredite
+              </h3>
+              <button
+                onClick={() => setShowAddCreditsModal(false)}
+                className="p-1 hover:bg-gray-100 rounded-lg"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-600">
+                Korisnik: <span className="font-medium">{userData.email}</span>
+              </p>
+              <p className="text-sm text-gray-600">
+                Trenutni limit: <span className="font-medium">{userData.subscription?.monthlyQueryLimit || 3} upita/mjesec</span>
+              </p>
+            </div>
+
+            {modalError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm">
+                <XCircle className="w-4 h-4" />
+                {modalError}
+              </div>
+            )}
+
+            {modalSuccess && (
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700 text-sm">
+                <Check className="w-4 h-4" />
+                {modalSuccess}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Broj kredita za dodati
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  value={creditsAmount}
+                  onChange={(e) => setCreditsAmount(parseInt(e.target.value) || 0)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Novi limit će biti: {(userData.subscription?.monthlyQueryLimit || 3) + creditsAmount} upita/mjesec
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Razlog (opcionalno)
+                </label>
+                <textarea
+                  value={creditsReason}
+                  onChange={(e) => setCreditsReason(e.target.value)}
+                  placeholder="npr. Kompenzacija za tehnički problem..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 h-20 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowAddCreditsModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Odustani
+              </button>
+              <button
+                onClick={handleAddCredits}
+                disabled={actionLoading === 'addCredits' || creditsAmount <= 0}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {actionLoading === 'addCredits' ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Dodavanje...
+                  </>
+                ) : (
+                  <>
+                    <Gift className="w-4 h-4" />
+                    Dodaj {creditsAmount} kredita
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Plan Modal */}
+      {showChangePlanModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <RefreshCw className="w-5 h-5 text-blue-600" />
+                Promijeni plan
+              </h3>
+              <button
+                onClick={() => setShowChangePlanModal(false)}
+                className="p-1 hover:bg-gray-100 rounded-lg"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-600">
+                Korisnik: <span className="font-medium">{userData.email}</span>
+              </p>
+              <p className="text-sm text-gray-600">
+                Trenutni plan: <span className="font-medium">{userData.subscription?.plan || 'FREE'}</span>
+              </p>
+            </div>
+
+            {modalError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm">
+                <XCircle className="w-4 h-4" />
+                {modalError}
+              </div>
+            )}
+
+            {modalSuccess && (
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700 text-sm">
+                <Check className="w-4 h-4" />
+                {modalSuccess}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Odaberi novi plan
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {availablePlans.map((plan) => (
+                    <button
+                      key={plan}
+                      onClick={() => setSelectedPlan(plan)}
+                      className={`px-3 py-2 text-sm font-medium rounded-lg border-2 transition-all ${
+                        selectedPlan === plan
+                          ? 'border-blue-500 bg-blue-50 text-blue-700'
+                          : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                      } ${userData.subscription?.plan === plan ? 'opacity-50' : ''}`}
+                    >
+                      {plan}
+                      {userData.subscription?.plan === plan && (
+                        <span className="block text-xs text-gray-500">(trenutni)</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Razlog (opcionalno)
+                </label>
+                <textarea
+                  value={planReason}
+                  onChange={(e) => setPlanReason(e.target.value)}
+                  placeholder="npr. Upgrade na zahtjev korisnika..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-20 resize-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <input
+                  type="checkbox"
+                  id="resetUsage"
+                  checked={resetUsageOnPlanChange}
+                  onChange={(e) => setResetUsageOnPlanChange(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="resetUsage" className="text-sm text-blue-800">
+                  <span className="font-medium">Resetiraj potrošnju</span>
+                  <span className="block text-xs text-blue-600">Preporučeno kod nadogradnje plana - resetira brojač (povijest se čuva)</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowChangePlanModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Odustani
+              </button>
+              <button
+                onClick={handleChangePlan}
+                disabled={actionLoading === 'changePlan' || !selectedPlan || selectedPlan === userData.subscription?.plan}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {actionLoading === 'changePlan' ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Mijenjanje...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4" />
+                    Promijeni plan
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

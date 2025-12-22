@@ -5,20 +5,23 @@ import {
 } from '@/components/auth/auth-wrapper';
 import {
   Zap,
-  Shield,
   BarChart3,
-  CheckCircle,
   ArrowRight,
-  Sparkles,
   Calculator,
   Store,
   Building2,
   Landmark,
-  Clock,
-  FileText,
   Target,
+  Sparkles,
+  ChevronDown,
+  HelpCircle,
+  Info,
 } from 'lucide-react';
 import { JsonLd } from '@/components/seo/json-ld';
+import { PricingSection } from '@/components/landing/pricing-section';
+import { BackToTop } from '@/components/back-to-top';
+import { HeroMockupAnimated } from '@/components/landing/hero-mockup-animated';
+import { MobileMenu } from '@/components/landing/mobile-menu';
 
 // Force dynamic rendering for auth components
 export const dynamic = 'force-dynamic';
@@ -98,59 +101,38 @@ const audiences = [
   },
 ];
 
-const plans = [
+const faqItems = [
   {
-    name: 'Free',
-    price: '0',
-    queries: '50',
-    features: [
-      '50 klasifikacija/mjesec',
-      'Web sučelje',
-      'Osnovna podrška',
-      'Povijest klasifikacija',
-    ],
+    question: 'Što je KPD šifra?',
+    answer:
+      'KPD (Klasifikacija Proizvoda po Djelatnostima) je 6-znamenkasta šifra koja klasificira proizvode i usluge prema vrsti ekonomske djelatnosti. Od 1. siječnja 2026. postaje obvezna na svim eRačunima u Hrvatskoj.',
   },
   {
-    name: 'Starter',
-    price: '9',
-    queries: '500',
-    features: [
-      '500 klasifikacija/mjesec',
-      'Neograničena povijest',
-      'Email podrška',
-      'Izvoz u CSV',
-    ],
-    popular: true,
+    question: 'Kako AI KPD Klasifikator pronalazi šifre?',
+    answer:
+      'AI KPD Klasifikator koristi napredni Google jezični model koji razumije hrvatski jezik. Analizira vaš opis proizvoda ili usluge i uspoređuje ga s cijelom bazom od 5.726 KPD šifri kako bi pronašao najprikladnije klasifikacije.',
   },
   {
-    name: 'Pro',
-    price: '19',
-    queries: '2.000',
-    features: [
-      '2.000 klasifikacija/mjesec',
-      'Batch klasifikacija',
-      'Prioritetna podrška',
-      'Napredna analitika',
-    ],
+    question: 'Koliko je AI klasifikacija pouzdana?',
+    answer:
+      'AI pruža prijedloge s prikazanom razinom pouzdanosti za svaku klasifikaciju. Za visoko pouzdane rezultate (iznad 80%), AI je vrlo siguran u prijedlog. Za niže pouzdanosti, preporučujemo provjeru i eventualno preciziranje opisa.',
   },
   {
-    name: 'Business',
-    price: '49',
-    queries: '10.000',
-    features: [
-      '10.000 klasifikacija/mjesec',
-      'Webhooks',
-      'SLA 99.9%',
-      'Dedicirana podrška',
-    ],
+    question: 'Mogu li koristiti klasifikator besplatno?',
+    answer:
+      'Da! Nudimo besplatni plan s 3 AI upita mjesečno za isprobavanje. Za veće potrebe, dostupni su plaćeni planovi od 6,99 EUR/mj (10 upita) do 30,99 EUR/mj (50 upita) s dodatnim značajkama poput CSV izvoza i prioritetne podrške.',
+  },
+  {
+    question: 'Jesu li moji podaci sigurni?',
+    answer:
+      'Da. Koristimo enkripciju za sve podatke u prijenosu i na pohrani. Vaši opisi se šalju Google AI servisu isključivo za potrebe klasifikacije i ne pohranjuju se trajno na njihovim serverima. Sustav je u skladu s GDPR propisima.',
   },
 ];
 
 const stats = [
-  { value: '3.300+', label: 'KPD šifri', icon: FileText },
-  { value: 'Prikazana', label: 'pouzdanost', icon: Shield },
-  { value: '10-60s', label: 'po upitu', icon: Clock },
-  { value: '24/7', label: 'dostupnost', icon: Zap },
+  { value: '5.726', label: 'KPD šifri u bazi' },
+  { value: '24/7', label: 'dostupnost sustava' },
+  { value: '10-60s', label: 'brzina obrade' },
 ];
 
 export default function HomePage() {
@@ -167,7 +149,7 @@ export default function HomePage() {
               </div>
               <div className="kpd-logo__text-group">
                 <span className="kpd-logo__text">AI KPD Klasifikator</span>
-                <span className="kpd-logo__subtext">asistent by 2klika</span>
+                <span className="kpd-logo__subtext">created by 2klika</span>
               </div>
             </Link>
 
@@ -178,22 +160,22 @@ export default function HomePage() {
               <a href="#how-it-works" className="kpd-nav__link">
                 Kako radi
               </a>
-              <Link href="/pricing" className="kpd-nav__link">
+              <a href="#pricing" className="kpd-nav__link">
                 Cijene
-              </Link>
-              <Link href="/faq" className="kpd-nav__link">
+              </a>
+              <a href="#faq" className="kpd-nav__link">
                 FAQ
-              </Link>
+              </a>
             </nav>
 
             <div className="kpd-header__actions">
               <ConditionalSignedOut>
-                <Link href="/login" className="kpd-nav__link">
+                <Link href="/login" className="kpd-nav__link kpd-hide-mobile">
                   Prijava
                 </Link>
                 <Link
                   href="/register"
-                  className="kpd-btn kpd-btn--primary kpd-btn--sm"
+                  className="kpd-btn kpd-btn--primary kpd-btn--sm kpd-hide-mobile"
                 >
                   Registracija
                 </Link>
@@ -201,12 +183,13 @@ export default function HomePage() {
               <ConditionalSignedIn>
                 <Link
                   href="/dashboard"
-                  className="kpd-btn kpd-btn--primary kpd-btn--sm"
+                  className="kpd-btn kpd-btn--primary kpd-btn--sm kpd-hide-mobile"
                 >
                   Dashboard
                   <ArrowRight className="kpd-btn__icon" />
                 </Link>
               </ConditionalSignedIn>
+              <MobileMenu />
             </div>
           </div>
         </header>
@@ -214,72 +197,86 @@ export default function HomePage() {
         {/* Hero Section */}
         <section className="kpd-hero">
           <div className="kpd-hero__bg"></div>
-          <div className="kpd-hero__content">
-            <div className="kpd-hero__badge">
-              <Sparkles className="kpd-hero__badge-icon" />
-              <span>Powered by Google</span>
-            </div>
+          <div className="kpd-hero__container">
+            {/* Left side - Text content */}
+            <div className="kpd-hero__content">
+              <div className="kpd-hero__badge">
+                <span className="kpd-hero__badge-dot"></span>
+                <span>Powered by Google Cloud</span>
+              </div>
 
-            <h1 className="kpd-heading-1">
-              Fiskalizacija 2.0 zahtijeva
-              <span className="kpd-text-gradient"> KPD šifre</span>
-            </h1>
+              <h1 className="kpd-hero__title">
+                Fiskalizacija 2.0: <span className="kpd-marker">KPD šifre</span> bez ručnog traženja
+              </h1>
 
-            <p className="kpd-hero__subtitle">
-              Od <strong>1.1.2026.</strong> svaki eRačun mora sadržavati
-              6-znamenkastu KPD šifru proizvoda ili usluge. Pronađite točnu
-              klasifikaciju brže nego ikad - bez ručnog pretraživanja tablica.
-            </p>
+              <p className="kpd-hero__subtitle">
+                Upišite stavku, a AI predloži odgovarajuću KPD šifru za e-račun. Jednostavno i brzo.
+              </p>
 
-            <div className="kpd-hero__cta">
-              <ConditionalSignedOut>
-                <Link
-                  href="/register"
-                  className="kpd-btn kpd-btn--primary kpd-btn--lg"
-                >
-                  Započnite besplatno
-                  <ArrowRight className="kpd-btn__icon" />
-                </Link>
-              </ConditionalSignedOut>
-              <ConditionalSignedIn>
-                <Link
-                  href="/classify"
-                  className="kpd-btn kpd-btn--primary kpd-btn--lg"
-                >
-                  Klasificiraj odmah
-                  <ArrowRight className="kpd-btn__icon" />
-                </Link>
-              </ConditionalSignedIn>
-              <a
-                href="#how-it-works"
-                className="kpd-btn kpd-btn--secondary kpd-btn--lg"
-              >
-                Kako funkcionira?
-              </a>
-            </div>
+              <div className="kpd-hero__cta">
+                <ConditionalSignedOut>
+                  <Link
+                    href="/login"
+                    className="kpd-btn kpd-btn--primary kpd-btn--lg"
+                  >
+                    Klasificiraj odmah
+                    <ArrowRight className="kpd-btn__icon" />
+                  </Link>
+                </ConditionalSignedOut>
+                <ConditionalSignedIn>
+                  <Link
+                    href="/classify"
+                    className="kpd-btn kpd-btn--primary kpd-btn--lg"
+                  >
+                    Klasificiraj odmah
+                    <ArrowRight className="kpd-btn__icon" />
+                  </Link>
+                </ConditionalSignedIn>
+              </div>
 
-            {/* Trust Stats */}
-            <div className="kpd-hero__stats">
-              {stats.map((stat) => (
-                <div key={stat.label} className="kpd-hero__stat">
-                  <stat.icon className="kpd-hero__stat-icon" />
-                  <span className="kpd-hero__stat-value">{stat.value}</span>
-                  <span className="kpd-hero__stat-label">{stat.label}</span>
+              {/* Trust indicators */}
+              <div className="kpd-hero__trust">
+                <div className="kpd-hero__trust-avatars">
+                  <span className="kpd-hero__trust-avatar">JF</span>
+                  <span className="kpd-hero__trust-avatar">MK</span>
+                  <span className="kpd-hero__trust-avatar">AP</span>
                 </div>
-              ))}
+                <span className="kpd-hero__trust-text">
+                  Koriste računovođe i poduzetnici diljem Hrvatske
+                </span>
+              </div>
             </div>
+
+            {/* Right side - Animated Mockup */}
+            <HeroMockupAnimated />
+          </div>
+        </section>
+
+        {/* Stats Section */}
+        <section className="kpd-hero__stats-section">
+          <div className="kpd-hero__stats">
+            {stats.map((stat) => (
+              <div key={stat.label} className="kpd-hero__stat">
+                <span className="kpd-hero__stat-value">{stat.value}</span>
+                <span className="kpd-hero__stat-label">{stat.label}</span>
+              </div>
+            ))}
           </div>
         </section>
 
         {/* Features Section */}
-        <section id="features" className="kpd-section">
+        <section id="features" className="kpd-section kpd-section--features">
           <div className="kpd-container">
             <div className="kpd-section__header">
-              <h2 className="kpd-heading-2">Zašto AI KPD Klasifikator?</h2>
+              <h2 className="kpd-heading-2">Zašto <span className="kpd-marker">AI KPD</span> Klasifikator?</h2>
               <p className="kpd-section__subtitle">
                 Klasifikacija proizvoda po djelatnostima (KPD) je obvezna za sve
                 koji izdaju eRačune. Naš AI alat analizira vaš opis i predlaže
                 najprikladnije šifre - brzo, pouzdano i jednostavno.
+              </p>
+              <p className="kpd-section__highlight">
+                <Sparkles className="kpd-section__highlight-icon" />
+                <span>Dobijte uvid u <strong>hijerarhiju kategorija</strong> - od glavne djelatnosti do specifične podkategorije. AI objašnjava zašto je šifra prikladna i koje su alternativne opcije.</span>
               </p>
             </div>
 
@@ -304,10 +301,10 @@ export default function HomePage() {
         </section>
 
         {/* How It Works Section */}
-        <section id="how-it-works" className="kpd-section kpd-section--alt">
+        <section id="how-it-works" className="kpd-section">
           <div className="kpd-container">
             <div className="kpd-section__header">
-              <h2 className="kpd-heading-2">Kako funkcionira?</h2>
+              <h2 className="kpd-heading-2">Kako <span className="kpd-marker">funkcionira</span>?</h2>
               <p className="kpd-section__subtitle">
                 Tri jednostavna koraka do točne KPD klasifikacije vaše
                 djelatnosti.
@@ -330,10 +327,10 @@ export default function HomePage() {
         </section>
 
         {/* Audience Section */}
-        <section id="audience" className="kpd-section">
+        <section id="audience" className="kpd-section kpd-section--alt">
           <div className="kpd-container">
             <div className="kpd-section__header">
-              <h2 className="kpd-heading-2">Za koga je AI KPD Klasifikator?</h2>
+              <h2 className="kpd-heading-2">Za koga je <span className="kpd-marker">AI KPD</span> Klasifikator?</h2>
               <p className="kpd-section__subtitle">
                 Bez obzira jeste li samostalni poduzetnik ili vodite veliki
                 knjigovodstveni servis, AI KPD Klasifikator pojednostavljuje
@@ -362,53 +359,43 @@ export default function HomePage() {
         </section>
 
         {/* Pricing Section */}
-        <section id="pricing" className="kpd-section kpd-section--alt">
-          <div className="kpd-container">
+        <PricingSection />
+
+        {/* FAQ Section */}
+        <section id="faq" className="kpd-section kpd-section--faq">
+          <div className="kpd-container kpd-container--narrow">
             <div className="kpd-section__header">
-              <h2 className="kpd-heading-2">Jednostavne cijene</h2>
+              <div className="kpd-section__badge">
+                <HelpCircle className="w-4 h-4" />
+                <span>Česta pitanja</span>
+              </div>
+              <h2 className="kpd-heading-2">
+                Imate <span className="kpd-marker">pitanja</span>?
+              </h2>
               <p className="kpd-section__subtitle">
-                Odaberite plan koji odgovara vašim potrebama. Bez skrivenih
-                troškova.
+                Pronađite odgovore na najčešća pitanja o KPD klasifikaciji i korištenju naše platforme.
               </p>
             </div>
 
-            <div className="kpd-pricing-grid">
-              {plans.map((plan) => (
-                <div
-                  key={plan.name}
-                  className={`kpd-pricing-card ${plan.popular ? 'kpd-pricing-card--popular' : ''}`}
-                >
-                  {plan.popular && (
-                    <span className="kpd-pricing-card__badge">
-                      Najpopularnije
-                    </span>
-                  )}
-                  <h3 className="kpd-pricing-card__name">{plan.name}</h3>
-                  <div className="kpd-pricing-card__price">
-                    <span className="kpd-pricing-card__amount">
-                      €{plan.price}
-                    </span>
-                    <span className="kpd-pricing-card__period">/mjesec</span>
+            <div className="kpd-faq__list">
+              {faqItems.map((item, index) => (
+                <details key={index} className="kpd-faq__item">
+                  <summary className="kpd-faq__question">
+                    <span>{item.question}</span>
+                    <ChevronDown className="kpd-faq__icon" />
+                  </summary>
+                  <div className="kpd-faq__answer">
+                    <p>{item.answer}</p>
                   </div>
-                  <p className="kpd-pricing-card__queries">
-                    {plan.queries} klasifikacija
-                  </p>
-                  <ul className="kpd-pricing-card__features">
-                    {plan.features.map((feature) => (
-                      <li key={feature} className="kpd-pricing-card__feature">
-                        <CheckCircle className="kpd-pricing-card__check" />
-                        <span>{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <Link
-                    href="/register"
-                    className={`kpd-btn kpd-btn--full ${plan.popular ? 'kpd-btn--primary' : 'kpd-btn--secondary'}`}
-                  >
-                    Započni
-                  </Link>
-                </div>
+                </details>
               ))}
+            </div>
+
+            <div className="kpd-faq__more">
+              <Link href="/faq" className="kpd-btn kpd-btn--outline kpd-btn--md">
+                Pogledaj sva pitanja
+                <ArrowRight className="kpd-btn__icon" />
+              </Link>
             </div>
           </div>
         </section>
@@ -419,7 +406,7 @@ export default function HomePage() {
           <div className="kpd-container">
             <div className="kpd-cta__content">
               <h2 className="kpd-cta__title">
-                Pripremite se za Fiskalizaciju 2.0
+                Pripremite se za <span className="kpd-marker">Fiskalizaciju 2.0</span>
               </h2>
               <p className="kpd-cta__subtitle">
                 Od 1. siječnja 2026. KPD šifre postaju obvezne na svim
@@ -437,6 +424,20 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* Disclaimer */}
+        <section className="kpd-disclaimer">
+          <div className="kpd-container">
+            <div className="kpd-disclaimer__content">
+              <Info className="kpd-disclaimer__icon" />
+              <p className="kpd-disclaimer__text">
+                <strong>Napomena:</strong> AI KPD Klasifikator je pomoćni alat koji daje prijedloge klasifikacija.
+                Rezultati ne predstavljaju službeno pravno ili porezno mišljenje.
+                Korisnik je odgovoran za provjeru i odabir konačne KPD šifre.
+              </p>
+            </div>
+          </div>
+        </section>
+
         {/* Footer */}
         <footer className="kpd-footer">
           <div className="kpd-container">
@@ -448,7 +449,7 @@ export default function HomePage() {
                   </div>
                   <div className="kpd-logo__text-group">
                     <span className="kpd-logo__text kpd-logo__text--light">AI KPD Klasifikator</span>
-                    <span className="kpd-logo__subtext kpd-logo__subtext--light">asistent by 2klika</span>
+                    <span className="kpd-logo__subtext kpd-logo__subtext--light">created by 2klika</span>
                   </div>
                 </Link>
                 <p className="kpd-footer__tagline">
@@ -463,9 +464,9 @@ export default function HomePage() {
                   <a href="#features" className="kpd-footer__link">
                     Značajke
                   </a>
-                  <Link href="/pricing" className="kpd-footer__link">
+                  <a href="#pricing" className="kpd-footer__link">
                     Cijene
-                  </Link>
+                  </a>
                   <a href="#how-it-works" className="kpd-footer__link">
                     Kako radi
                   </a>
@@ -526,12 +527,18 @@ export default function HomePage() {
             </div>
 
             <div className="kpd-footer__bottom">
+              <p className="kpd-footer__disclaimer">
+                AI klasifikacija je pomoćni alat — provjerite KPD šifre prije službene upotrebe.
+              </p>
               <p className="kpd-footer__copyright">
                 © {new Date().getFullYear()} 2 KLIKA obrt. Sva prava pridržana.
               </p>
             </div>
           </div>
         </footer>
+
+        {/* Back to Top Button */}
+        <BackToTop />
       </div>
     </>
   );

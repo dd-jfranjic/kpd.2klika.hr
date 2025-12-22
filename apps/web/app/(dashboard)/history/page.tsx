@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/contexts/auth-context';
 import {
   History,
@@ -10,18 +11,47 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  Clock
+  Clock,
+  Eye,
+  X,
+  CheckCircle2,
+  Sparkles,
+  Crown,
+  AlertCircle
 } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api/v1';
 
+interface SuggestedCode {
+  code: string;
+  name: string | null;
+}
+
+interface SuggestionData {
+  code: string;
+  name: string;
+  confidence: number;
+  reason: string | null;
+  sector: string | null;
+  level?: number;
+  isFinal?: boolean;
+}
+
 interface QueryHistoryItem {
   id: string;
   inputText: string;
+  suggestedCodes: string[];
+  suggestedCodesWithNames: SuggestedCode[];
   selectedCode: string | null;
   selectedCodeName: string | null;
   confidence: number | null;
+  aiModel: string | null;
+  latencyMs: number | null;
+  cached: boolean;
   createdAt: string;
+  explanation: string | null;
+  sector: string | null;
+  suggestionsData: SuggestionData[] | null;
 }
 
 interface PaginationInfo {
@@ -29,6 +59,66 @@ interface PaginationInfo {
   limit: number;
   total: number;
   pages: number;
+}
+
+// Portal Tooltip Component - renders outside overflow:hidden containers
+function PortalTooltip({
+  children,
+  content,
+  visible
+}: {
+  children: React.ReactNode;
+  content: string;
+  visible: boolean;
+}) {
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (visible && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPosition({
+        top: rect.bottom + window.scrollY + 8,
+        left: rect.left + window.scrollX + (rect.width / 2),
+      });
+    }
+  }, [visible]);
+
+  return (
+    <div ref={triggerRef}>
+      {children}
+      {mounted && visible && createPortal(
+        <div
+          style={{
+            position: 'absolute',
+            top: position.top,
+            left: position.left,
+            transform: 'translateX(-50%)',
+            zIndex: 99999,
+          }}
+          className="px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl whitespace-nowrap pointer-events-none"
+        >
+          {content}
+          <div
+            className="absolute bottom-full left-1/2 -translate-x-1/2"
+            style={{
+              width: 0,
+              height: 0,
+              borderLeft: '6px solid transparent',
+              borderRight: '6px solid transparent',
+              borderBottom: '6px solid rgb(17, 24, 39)',
+            }}
+          />
+        </div>,
+        document.body
+      )}
+    </div>
+  );
 }
 
 export default function HistoryPage() {
@@ -44,6 +134,9 @@ export default function HistoryPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [selectedQuery, setSelectedQuery] = useState<QueryHistoryItem | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [showExportTooltip, setShowExportTooltip] = useState(false);
 
   useEffect(() => {
     fetchHistory(1);
@@ -130,62 +223,38 @@ export default function HistoryPage() {
     if (!token || pagination.total === 0) return;
 
     setIsExporting(true);
+    setExportError(null);
+
     try {
-      // Fetch all items for export (up to 1000)
-      const params = new URLSearchParams({
-        page: '1',
-        limit: '1000',
-      });
+      // Use backend export endpoint (handles PRO+ restriction)
+      const params = new URLSearchParams();
       if (searchTerm) {
         params.append('search', searchTerm);
       }
 
-      const response = await fetch(`${API_BASE}/queries?${params}`, {
+      const response = await fetch(`${API_BASE}/queries/export?${params}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
+      if (response.status === 403) {
+        const data = await response.json();
+        setExportError(data.message || 'CSV izvoz je dostupan samo za KPD Pro i više planove.');
+        return;
+      }
+
       if (response.ok) {
         const data = await response.json();
-        if (data.success && data.data.items?.length > 0) {
-          const items: QueryHistoryItem[] = data.data.items;
-
-          // Build CSV content
-          const headers = ['Datum', 'Upit', 'KPD Šifra', 'Naziv šifre', 'Pouzdanost (%)'];
-          const csvRows = [
-            headers.join(';'),
-            ...items.map((item) => {
-              const date = new Date(item.createdAt).toLocaleDateString('hr-HR', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              });
-              // Escape quotes and wrap in quotes for CSV safety
-              const escapeCsv = (val: string | null) => {
-                if (!val) return '';
-                return `"${val.replace(/"/g, '""')}"`;
-              };
-              return [
-                escapeCsv(date),
-                escapeCsv(item.inputText),
-                item.selectedCode || '',
-                escapeCsv(item.selectedCodeName),
-                item.confidence ? Math.round(item.confidence * 100).toString() : '0',
-              ].join(';');
-            }),
-          ];
-
-          const csvContent = '\uFEFF' + csvRows.join('\n'); // BOM for Excel UTF-8
+        if (data.success && data.data?.content) {
+          const csvContent = '\uFEFF' + data.data.content; // BOM for Excel UTF-8
           const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
           const url = URL.createObjectURL(blob);
 
           // Create download link
           const link = document.createElement('a');
           link.setAttribute('href', url);
-          link.setAttribute('download', `kpd-povijest-${new Date().toISOString().split('T')[0]}.csv`);
+          link.setAttribute('download', data.data.filename || `kpd-povijest-${new Date().toISOString().split('T')[0]}.csv`);
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
@@ -194,6 +263,7 @@ export default function HistoryPage() {
       }
     } catch (error) {
       console.error('Failed to export CSV:', error);
+      setExportError('Greška pri izvozu CSV datoteke.');
     } finally {
       setIsExporting(false);
     }
@@ -224,20 +294,48 @@ export default function HistoryPage() {
               <Search className="w-4 h-4" />
               Pretraži
             </button>
-            <button
-              type="button"
-              onClick={handleExportCsv}
-              disabled={isExporting || pagination.total === 0}
-              className="kpd-btn kpd-btn--secondary"
+            <PortalTooltip
+              content="Dostupno za PRO, Business i Enterprise planove"
+              visible={showExportTooltip}
             >
-              {isExporting ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
-              ) : (
-                <Download className="w-4 h-4" />
-              )}
-              {isExporting ? 'Eksportiranje...' : 'Export CSV'}
-            </button>
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                disabled={isExporting || pagination.total === 0}
+                className="kpd-btn kpd-btn--secondary"
+                onMouseEnter={() => setShowExportTooltip(true)}
+                onMouseLeave={() => setShowExportTooltip(false)}
+              >
+                {isExporting ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    <Crown className="w-3 h-3 text-yellow-500" />
+                  </>
+                )}
+                {isExporting ? 'Eksportiranje...' : 'Export CSV'}
+              </button>
+            </PortalTooltip>
           </form>
+          {/* Export error message */}
+          {exportError && (
+            <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm text-amber-800">{exportError}</p>
+                <a href="/settings/billing" className="text-sm text-amber-700 hover:text-amber-900 underline mt-1 inline-block">
+                  Nadogradite plan →
+                </a>
+              </div>
+              <button
+                onClick={() => setExportError(null)}
+                className="p-1 hover:bg-amber-100 rounded transition-colors"
+              >
+                <X className="w-4 h-4 text-amber-600" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -291,6 +389,9 @@ export default function HistoryPage() {
                     KPD Šifra
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Ponuđene
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     Pouzdanost
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -320,23 +421,37 @@ export default function HistoryPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
+                      <span className="kpd-badge kpd-badge--muted">
+                        {item.suggestedCodesWithNames?.length || item.suggestedCodes?.length || 0} šifri
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
                       <span className={`kpd-badge ${getConfidenceClass(item.confidence || 0)}`}>
                         {item.confidence ? Math.round(item.confidence * 100) : 0}%
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => item.selectedCode && copyToClipboard(item.selectedCode)}
-                        className="kpd-btn kpd-btn--ghost kpd-btn--sm"
-                        title="Kopiraj šifru"
-                        disabled={!item.selectedCode}
-                      >
-                        {copiedCode === item.selectedCode ? (
-                          <Check className="w-4 h-4 text-green-600" />
-                        ) : (
-                          <Copy className="w-4 h-4" />
-                        )}
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => setSelectedQuery(item)}
+                          className="kpd-btn kpd-btn--ghost kpd-btn--sm"
+                          title="Pogledaj detalje"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => item.selectedCode && copyToClipboard(item.selectedCode)}
+                          className="kpd-btn kpd-btn--ghost kpd-btn--sm"
+                          title="Kopiraj šifru"
+                          disabled={!item.selectedCode}
+                        >
+                          {copiedCode === item.selectedCode ? (
+                            <Check className="w-4 h-4 text-green-600" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -374,6 +489,264 @@ export default function HistoryPage() {
           </div>
         )}
       </div>
+
+      {/* Query Details Modal */}
+      {selectedQuery && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setSelectedQuery(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b bg-gray-50 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-primary-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Detalji klasifikacije</h3>
+                  <p className="text-sm text-gray-500">{formatDate(selectedQuery.createdAt)}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedQuery(null)}
+                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)] space-y-6">
+              {/* Original Query */}
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Upit</label>
+                <p className="mt-1 text-gray-900 bg-gray-50 p-3 rounded-lg">{selectedQuery.inputText}</p>
+              </div>
+
+              {/* Selected Code */}
+              {selectedQuery.selectedCode && (
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                    <span className="text-xs font-semibold text-green-700 uppercase tracking-wider">Odabrana šifra</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-mono text-lg font-bold text-green-800">{selectedQuery.selectedCode}</span>
+                      <p className="text-sm text-green-700 mt-1">{selectedQuery.selectedCodeName}</p>
+                    </div>
+                    <button
+                      onClick={() => copyToClipboard(selectedQuery.selectedCode!)}
+                      className="p-2 hover:bg-green-100 rounded-lg transition-colors"
+                      title="Kopiraj"
+                    >
+                      {copiedCode === selectedQuery.selectedCode ? (
+                        <Check className="w-5 h-5 text-green-600" />
+                      ) : (
+                        <Copy className="w-5 h-5 text-green-600" />
+                      )}
+                    </button>
+                  </div>
+                  {selectedQuery.confidence && (
+                    <div className="mt-2">
+                      <span className={`kpd-badge ${getConfidenceClass(selectedQuery.confidence)}`}>
+                        Pouzdanost: {Math.round(selectedQuery.confidence * 100)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* AI Explanation */}
+              {selectedQuery.explanation && (
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles className="w-5 h-5 text-blue-600" />
+                    <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">AI objašnjenje</span>
+                  </div>
+                  <p className="text-sm text-blue-800 leading-relaxed">{selectedQuery.explanation}</p>
+                  {selectedQuery.sector && (
+                    <div className="mt-3 pt-3 border-t border-blue-200">
+                      <span className="text-xs font-semibold text-blue-600">Sektor: </span>
+                      <span className="text-sm text-blue-800">{selectedQuery.sector}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* All Suggested Codes with Full AI Response */}
+              <div>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  Sve ponuđene šifre ({selectedQuery.suggestionsData?.length || selectedQuery.suggestedCodesWithNames?.length || selectedQuery.suggestedCodes?.length || 0})
+                </label>
+                <div className="mt-3 space-y-3">
+                  {/* Use suggestionsData if available (new format with full AI response) */}
+                  {selectedQuery.suggestionsData && selectedQuery.suggestionsData.length > 0 ? (
+                    selectedQuery.suggestionsData.map((suggestion, index) => {
+                      const isSelected = suggestion.code === selectedQuery.selectedCode;
+                      return (
+                        <div
+                          key={index}
+                          className={`p-4 rounded-lg border transition-colors ${
+                            isSelected
+                              ? 'bg-green-50 border-green-300'
+                              : 'bg-gray-50 border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-3 flex-1">
+                              <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                                <span className={`font-mono font-semibold text-sm px-2 py-1 rounded ${
+                                  isSelected ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-700'
+                                }`}>
+                                  {suggestion.code}
+                                </span>
+                                {/* Show confidence for each code */}
+                                {suggestion.confidence > 0 && (
+                                  <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                                    isSelected
+                                      ? 'text-green-600 bg-green-100'
+                                      : 'text-gray-500 bg-gray-200'
+                                  }`}>
+                                    {Math.round(suggestion.confidence * 100)}%
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex-1 space-y-2">
+                                {/* Code name */}
+                                <p className={`text-sm font-medium leading-relaxed ${isSelected ? 'text-green-800' : 'text-gray-800'}`}>
+                                  {suggestion.name || 'Naziv nije dostupan'}
+                                </p>
+                                {/* AI Reason - the key part! */}
+                                {suggestion.reason && (
+                                  <div className={`text-sm leading-relaxed p-2 rounded ${
+                                    isSelected ? 'bg-green-100/50 text-green-700' : 'bg-white text-gray-600'
+                                  }`}>
+                                    {suggestion.reason}
+                                  </div>
+                                )}
+                                {/* Sector */}
+                                {suggestion.sector && (
+                                  <div className={`text-xs ${isSelected ? 'text-green-600' : 'text-gray-500'}`}>
+                                    <span className="font-semibold">Sektor:</span> {suggestion.sector}
+                                  </div>
+                                )}
+                              </div>
+                              {isSelected && (
+                                <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                              )}
+                            </div>
+                            <button
+                              onClick={() => copyToClipboard(suggestion.code)}
+                              className={`p-1.5 rounded transition-colors flex-shrink-0 ${
+                                isSelected ? 'hover:bg-green-100' : 'hover:bg-gray-200'
+                              }`}
+                              title="Kopiraj šifru"
+                            >
+                              {copiedCode === suggestion.code ? (
+                                <Check className="w-4 h-4 text-green-600" />
+                              ) : (
+                                <Copy className="w-4 h-4 text-gray-400" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    /* Fallback to old format for backward compatibility */
+                    (selectedQuery.suggestedCodesWithNames?.length > 0 ? selectedQuery.suggestedCodesWithNames : selectedQuery.suggestedCodes?.map(c => ({ code: c, name: null })) || []).map((suggestion, index) => {
+                      const isSelected = suggestion.code === selectedQuery.selectedCode;
+                      return (
+                        <div
+                          key={index}
+                          className={`p-3 rounded-lg border transition-colors ${
+                            isSelected
+                              ? 'bg-green-50 border-green-300'
+                              : 'bg-gray-50 border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-3 flex-1">
+                              <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                                <span className={`font-mono font-semibold text-sm px-2 py-1 rounded ${
+                                  isSelected ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-700'
+                                }`}>
+                                  {suggestion.code}
+                                </span>
+                                {isSelected && selectedQuery.confidence ? (
+                                  <span className="text-xs font-semibold text-green-600 bg-green-100 px-1.5 py-0.5 rounded">
+                                    {Math.round(selectedQuery.confidence * 100)}%
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-gray-400">
+                                    #{index + 1}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex-1">
+                                <p className={`text-sm leading-relaxed ${isSelected ? 'text-green-800 font-medium' : 'text-gray-700'}`}>
+                                  {suggestion.name || 'Naziv nije dostupan'}
+                                </p>
+                              </div>
+                              {isSelected && (
+                                <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                              )}
+                            </div>
+                            <button
+                              onClick={() => copyToClipboard(suggestion.code)}
+                              className={`p-1.5 rounded transition-colors flex-shrink-0 ${
+                                isSelected ? 'hover:bg-green-100' : 'hover:bg-gray-200'
+                              }`}
+                              title="Kopiraj šifru"
+                            >
+                              {copiedCode === suggestion.code ? (
+                                <Check className="w-4 h-4 text-green-600" />
+                              ) : (
+                                <Copy className="w-4 h-4 text-gray-400" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Meta Info */}
+              {(selectedQuery.aiModel || selectedQuery.latencyMs) && (
+                <div className="flex flex-wrap gap-4 text-xs text-gray-500 pt-4 border-t">
+                  {selectedQuery.aiModel && (
+                    <span>Model: <span className="font-medium">{selectedQuery.aiModel}</span></span>
+                  )}
+                  {selectedQuery.latencyMs && (
+                    <span>Vrijeme: <span className="font-medium">{selectedQuery.latencyMs}ms</span></span>
+                  )}
+                  {selectedQuery.cached && (
+                    <span className="text-blue-600">● Keširan rezultat</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t bg-gray-50 flex justify-end">
+              <button
+                onClick={() => setSelectedQuery(null)}
+                className="kpd-btn kpd-btn--secondary"
+              >
+                Zatvori
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -79,11 +79,25 @@ export class QueriesService {
       },
     });
 
+    // Fetch names for all suggested codes
+    const allSuggestedCodes = [...new Set(queries.flatMap((q) => q.suggestedCodes))];
+    const kpdCodes = allSuggestedCodes.length > 0
+      ? await this.prisma.kpdCode.findMany({
+          where: { id: { in: allSuggestedCodes } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const kpdCodeMap = new Map(kpdCodes.map((k) => [k.id, k.name]));
+
     return {
       items: queries.map((q) => ({
         id: q.id,
         inputText: q.inputText,
         suggestedCodes: q.suggestedCodes,
+        suggestedCodesWithNames: q.suggestedCodes.map((code) => ({
+          code,
+          name: kpdCodeMap.get(code) || null,
+        })),
         selectedCode: q.selectedCode,
         selectedCodeName: q.selectedKpd?.name || null,
         confidence: q.confidence,
@@ -91,6 +105,9 @@ export class QueriesService {
         latencyMs: q.latencyMs,
         cached: q.cached,
         createdAt: q.createdAt,
+        explanation: q.explanation,
+        sector: q.sector,
+        suggestionsData: q.suggestionsData as any[] || null,
       })),
       pagination: {
         page,
@@ -137,12 +154,25 @@ export class QueriesService {
 
   /**
    * Eksportaj upite u CSV format
+   * NAPOMENA: Dostupno samo za PRO, BUSINESS i ENTERPRISE planove
    */
   async exportQueries(userId: string, filters: QueryFilters) {
     const organizationId = await this.getUserOrganizationId(userId);
 
     if (!organizationId) {
       throw new ForbiddenException('Nemate organizaciju');
+    }
+
+    // Provjeri plan - CSV export samo za PRO+
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { organizationId },
+    });
+
+    const allowedPlans = ['PRO', 'BUSINESS', 'ENTERPRISE'];
+    if (!subscription || !allowedPlans.includes(subscription.plan)) {
+      throw new ForbiddenException(
+        'CSV izvoz je dostupan samo za KPD Pro i više planove. Nadogradite vaš plan za pristup ovoj funkcionalnosti.',
+      );
     }
 
     // Build where clause (same as getQueries)
@@ -190,6 +220,8 @@ export class QueriesService {
       'Odabrani kod',
       'Naziv koda',
       'Pouzdanost',
+      'AI objašnjenje',
+      'Sektor',
     ];
 
     const rows = queries.map((q) => [
@@ -199,6 +231,8 @@ export class QueriesService {
       q.selectedCode || '',
       q.selectedKpd?.name ? `"${q.selectedKpd.name.replace(/"/g, '""')}"` : '',
       q.confidence ? `${Math.round(q.confidence * 100)}%` : '',
+      q.explanation ? `"${q.explanation.replace(/"/g, '""')}"` : '',
+      q.sector ? `"${q.sector.replace(/"/g, '""')}"` : '',
     ]);
 
     const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');

@@ -125,12 +125,16 @@ export class AdminService {
     const planOrder: Record<string, number> = { FREE: 0, BASIC: 1, PLUS: 2, PRO: 3, BUSINESS: 4, ENTERPRISE: 5 };
     planDistribution.sort((a, b) => (planOrder[a.plan] ?? 99) - (planOrder[b.plan] ?? 99));
 
-    // Users near limit (80%+ usage this month)
+    // Users usage stats this month
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    // Exclude SUPER_ADMIN users from near limit calculation
+    // Count only SUCCESSFUL queries (with results) - consistent with limit enforcement
+    // Separate counters for accurate reporting:
+    // - usersNearLimit: 80-99% of limit (warning zone)
+    // - usersAtLimit: 100%+ of limit (reached/exceeded)
+    // NOTE: suggestedCodes is text[] array, not jsonb - use array_length for checking
     const usersNearLimit = await this.prisma.$queryRaw<{ count: bigint }[]>`
       SELECT COUNT(DISTINCT u.id) as count
       FROM "User" u
@@ -141,8 +145,33 @@ export class AdminService {
       WHERE u.role != 'SUPER_ADMIN'
       AND (
         SELECT COUNT(*) FROM "Query" q
-        WHERE q."userId" = u.id AND q."createdAt" >= ${startOfMonth}
+        WHERE q."userId" = u.id
+        AND q."createdAt" >= ${startOfMonth}
+        AND array_length(q."suggestedCodes", 1) > 0
       ) >= COALESCE(s."monthlyQueryLimit", pc."monthlyQueryLimit", 3) * 0.8
+      AND (
+        SELECT COUNT(*) FROM "Query" q
+        WHERE q."userId" = u.id
+        AND q."createdAt" >= ${startOfMonth}
+        AND array_length(q."suggestedCodes", 1) > 0
+      ) < COALESCE(s."monthlyQueryLimit", pc."monthlyQueryLimit", 3)
+    `;
+
+    // Users who have reached or exceeded their limit (100%+)
+    const usersAtLimit = await this.prisma.$queryRaw<{ count: bigint }[]>`
+      SELECT COUNT(DISTINCT u.id) as count
+      FROM "User" u
+      JOIN "OrganizationMember" om ON u.id = om."userId"
+      JOIN "Organization" o ON om."organizationId" = o.id
+      JOIN "Subscription" s ON o.id = s."organizationId"
+      LEFT JOIN "PlanConfig" pc ON s.plan::text = pc.plan::text
+      WHERE u.role != 'SUPER_ADMIN'
+      AND (
+        SELECT COUNT(*) FROM "Query" q
+        WHERE q."userId" = u.id
+        AND q."createdAt" >= ${startOfMonth}
+        AND array_length(q."suggestedCodes", 1) > 0
+      ) >= COALESCE(s."monthlyQueryLimit", pc."monthlyQueryLimit", 3)
     `;
 
     // Revenue by plan
@@ -167,7 +196,8 @@ export class AdminService {
       mrr: monthlyRevenue,
       mrrGrowth: 0, // TODO: Calculate based on previous month
       planDistribution,
-      usersNearLimit: Number(usersNearLimit[0]?.count || 0),
+      usersNearLimit: Number(usersNearLimit[0]?.count || 0), // 80-99% usage
+      usersAtLimit: Number(usersAtLimit[0]?.count || 0),   // 100%+ usage
       unpaidInvoices: 0, // TODO: Implement when billing is added
       inactiveOrgs: 0, // TODO: Track org activity
       // Legacy fields for backward compatibility
@@ -274,6 +304,7 @@ export class AdminService {
     limit?: number;
     suspended?: boolean;
     nearLimit?: boolean;
+    atLimit?: boolean;
     plan?: string;
   }) {
     const page = params.page || 1;
@@ -384,18 +415,27 @@ export class AdminService {
       mappedUsers = mappedUsers.filter((u) => u.plan === params.plan);
     }
 
-    // Post-filter for nearLimit (users with usage >= 80% of limit)
+    // Post-filter for atLimit (users who reached/exceeded 100% of limit)
+    if (params.atLimit) {
+      mappedUsers = mappedUsers.filter((u) => {
+        if (u.monthlyLimit <= 0) return false; // Unlimited plans
+        return u.currentUsage >= u.monthlyLimit; // 100%+
+      });
+    }
+
+    // Post-filter for nearLimit (users with usage 80-99% of limit)
     if (params.nearLimit) {
       mappedUsers = mappedUsers.filter((u) => {
         if (u.monthlyLimit <= 0) return false; // Unlimited plans
-        return u.currentUsage >= u.monthlyLimit * 0.8;
+        const percentage = (u.currentUsage / u.monthlyLimit) * 100;
+        return percentage >= 80 && percentage < 100; // 80-99%
       });
     }
 
     // Note: When post-filtering, total/pagination may not be accurate
     // For accurate pagination with filters, we'd need to query differently
     // This is acceptable for admin filtering where counts are informational
-    const filteredTotal = params.plan || params.nearLimit ? mappedUsers.length : total;
+    const filteredTotal = params.plan || params.nearLimit || params.atLimit ? mappedUsers.length : total;
 
     return {
       users: mappedUsers,
@@ -546,8 +586,10 @@ export class AdminService {
   }
 
   /**
-   * Reset user's monthly usage - deletes all queries from current month
-   * This gives the user back their full monthly quota
+   * Reset user's monthly usage - preserves query history!
+   * This gives the user back their full monthly quota by updating currentPeriodStart.
+   * The checkUsageLimit function only counts queries AFTER currentPeriodStart,
+   * so setting it to NOW effectively resets usage while keeping history.
    */
   async resetUserUsage(userId: string) {
     // Get user with organization
@@ -577,45 +619,202 @@ export class AdminService {
     }
 
     const organizationId = membership.organization.id;
+    const subscription = membership.organization.subscription;
 
-    // Calculate current month boundaries
+    if (!subscription) {
+      throw new Error('Organizacija nema aktivnu pretplatu');
+    }
+
+    // Count queries that will be "reset" (for logging purposes)
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    const oldPeriodStart = subscription.currentPeriodStart ?? new Date(now.getFullYear(), now.getMonth(), 1);
 
-    // Delete all queries for this organization from current month
-    const deletedQueries = await this.prisma.query.deleteMany({
+    const queriesBeingReset = await this.prisma.query.count({
       where: {
         organizationId,
-        createdAt: {
-          gte: startOfMonth,
-          lte: endOfMonth,
+        createdAt: { gte: oldPeriodStart },
+        NOT: {
+          suggestedCodes: { equals: [] },
         },
       },
     });
 
-    // Also delete usage records for current month if they exist
-    await this.prisma.usageRecord.deleteMany({
-      where: {
-        organizationId,
-        createdAt: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
+    // Update currentPeriodStart to NOW - this effectively resets usage
+    // because checkUsageLimit only counts queries AFTER currentPeriodStart
+    // Query history is preserved for analytics and audit purposes
+    await this.prisma.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        currentPeriodStart: now,
       },
     });
 
     // Get the plan limit for response
     const planConfig = await this.prisma.planConfig.findUnique({
-      where: { plan: membership.organization.subscription?.plan || 'FREE' },
+      where: { plan: subscription.plan || 'FREE' },
     });
 
     return {
-      message: `Mjesečna potrošnja resetirana za korisnika ${user.email}`,
-      deletedQueries: deletedQueries.count,
+      message: `Mjesečna potrošnja resetirana za korisnika ${user.email} (povijest sačuvana)`,
+      resetQueries: queriesBeingReset,
       organizationId,
-      plan: membership.organization.subscription?.plan || 'FREE',
+      plan: subscription.plan || 'FREE',
       newLimit: planConfig?.monthlyQueryLimit ?? planConfig?.dailyQueryLimit ?? 0,
+    };
+  }
+
+  /**
+   * Add bonus credits (increase monthly limit) for a user's organization
+   */
+  async addUserCredits(userId: string, amount: number) {
+    // 1. Get user with organization
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        memberships: {
+          include: {
+            organization: {
+              include: {
+                subscription: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new Error('Korisnik nije pronađen');
+    }
+
+    const membership = user.memberships[0];
+    if (!membership?.organization) {
+      throw new Error('Korisnik nema organizaciju');
+    }
+
+    const organizationId = membership.organization.id;
+    const subscription = membership.organization.subscription;
+
+    if (!subscription) {
+      throw new Error('Organizacija nema aktivnu pretplatu');
+    }
+
+    // Get current plan config for default limit
+    const planConfig = await this.prisma.planConfig.findUnique({
+      where: { plan: subscription.plan },
+    });
+
+    const previousLimit = subscription.monthlyQueryLimit ?? planConfig?.monthlyQueryLimit ?? 0;
+    const newLimit = previousLimit + amount;
+
+    // 2. Update subscription with new limit
+    await this.prisma.subscription.update({
+      where: { id: subscription.id },
+      data: { monthlyQueryLimit: newLimit },
+    });
+
+    return {
+      message: `Dodano ${amount} kredita korisniku ${user.email}`,
+      previousLimit,
+      newLimit,
+      organizationId,
+      userEmail: user.email,
+    };
+  }
+
+  /**
+   * Change user's subscription plan (admin override)
+   * @param resetUsage - If true, resets the usage counter for the current month (recommended when upgrading)
+   */
+  async changeUserPlan(userId: string, newPlan: string, resetUsage: boolean = false) {
+    // 1. Get user with organization
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        memberships: {
+          include: {
+            organization: {
+              include: {
+                subscription: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new Error('Korisnik nije pronađen');
+    }
+
+    const membership = user.memberships[0];
+    if (!membership?.organization) {
+      throw new Error('Korisnik nema organizaciju');
+    }
+
+    const organizationId = membership.organization.id;
+    const subscription = membership.organization.subscription;
+
+    if (!subscription) {
+      throw new Error('Organizacija nema aktivnu pretplatu');
+    }
+
+    // Get plan configs
+    const oldPlanConfig = await this.prisma.planConfig.findUnique({
+      where: { plan: subscription.plan },
+    });
+    const newPlanConfig = await this.prisma.planConfig.findUnique({
+      where: { plan: newPlan as 'FREE' | 'BASIC' | 'PRO' | 'BUSINESS' | 'ENTERPRISE' },
+    });
+
+    if (!newPlanConfig) {
+      throw new Error('Nevažeći plan');
+    }
+
+    const previousPlan = subscription.plan;
+    const previousLimit = subscription.monthlyQueryLimit ?? oldPlanConfig?.monthlyQueryLimit ?? 0;
+    const newLimit = newPlanConfig.monthlyQueryLimit ?? newPlanConfig.dailyQueryLimit ?? 0;
+
+    // 2. Update subscription
+    await this.prisma.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        plan: newPlan as 'FREE' | 'BASIC' | 'PRO' | 'BUSINESS' | 'ENTERPRISE',
+        monthlyQueryLimit: newLimit,
+        // Note: We're doing an admin override, not going through Stripe
+        // For Stripe-managed subscriptions, this might need additional handling
+      },
+    });
+
+    // 3. Reset usage if requested (useful when upgrading plans)
+    // NOTE: We preserve query history! Usage reset works by updating currentPeriodStart
+    // to NOW - the checkUsageLimit function only counts queries AFTER currentPeriodStart
+    let usageReset = false;
+    if (resetUsage) {
+      const now = new Date();
+
+      // Update currentPeriodStart to NOW - this effectively resets usage
+      // because checkUsageLimit only counts queries after this date
+      // Query history is preserved for analytics and audit purposes
+      await this.prisma.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          currentPeriodStart: now,
+        },
+      });
+
+      usageReset = true;
+    }
+
+    return {
+      message: `Plan promijenjen s ${previousPlan} na ${newPlan} za korisnika ${user.email}${usageReset ? ' (potrošnja resetirana)' : ''}`,
+      previousPlan,
+      previousLimit,
+      newPlan,
+      newLimit,
+      organizationId,
+      userEmail: user.email,
+      usageReset,
     };
   }
 
@@ -1145,19 +1344,23 @@ export class AdminService {
     const endOfPreviousMonth = new Date(now.getFullYear(), now.getMonth(), 0);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    // Plan pricing for MRR calculation
+    // Plan pricing for MRR calculation (based on KPD actual pricing)
     const planPrices: Record<string, number> = {
       FREE: 0,
-      BASIC: 9,
-      PRO: 29,
-      BUSINESS: 99,
-      ENTERPRISE: 299,
+      BASIC: 6.99,
+      PRO: 11.99,
+      BUSINESS: 30.99,
+      ENTERPRISE: 199,
     };
 
-    // Get current active subscriptions
+    // Exclude master admin organization from all billing stats
+    const ADMIN_ORG_ID = 'admin-org-001';
+
+    // Get current active subscriptions (excluding admin org)
     const activeSubscriptions = await this.prisma.subscription.findMany({
       where: {
         status: 'ACTIVE',
+        organizationId: { not: ADMIN_ORG_ID },
       },
       select: {
         plan: true,
@@ -1177,9 +1380,10 @@ export class AdminService {
     const totalSubscribers = activeSubscriptions.filter(s => s.plan !== 'FREE').length;
 
     // Calculate previous month MRR for growth calculation
-    // Get subscriptions that were active at end of previous month
+    // Get subscriptions that were active at end of previous month (excluding admin org)
     const previousMonthSubscriptions = await this.prisma.subscription.findMany({
       where: {
+        organizationId: { not: ADMIN_ORG_ID },
         createdAt: { lte: endOfPreviousMonth },
         OR: [
           { status: 'ACTIVE' },
@@ -1215,6 +1419,7 @@ export class AdminService {
     // Churn rate (cancelled subscriptions in last 30 days / total active at start)
     const cancelledLast30Days = await this.prisma.subscription.count({
       where: {
+        organizationId: { not: ADMIN_ORG_ID },
         status: { in: ['CANCELLED', 'PAST_DUE'] },
         updatedAt: { gte: thirtyDaysAgo },
       }
@@ -1227,13 +1432,17 @@ export class AdminService {
 
     // Conversion rate (FREE to paid in last 30 days / total FREE users at start)
     const freeUsers = await this.prisma.subscription.count({
-      where: { plan: 'FREE' }
+      where: {
+        organizationId: { not: ADMIN_ORG_ID },
+        plan: 'FREE'
+      }
     });
 
     // Users who upgraded from FREE to paid in last 30 days
     // We approximate by looking at non-FREE subs created recently
     const upgradedLast30Days = await this.prisma.subscription.count({
       where: {
+        organizationId: { not: ADMIN_ORG_ID },
         plan: { not: 'FREE' },
         createdAt: { gte: thirtyDaysAgo },
       }
@@ -1246,12 +1455,18 @@ export class AdminService {
 
     // Unpaid invoices (subscriptions with PAST_DUE status)
     const unpaidCount = await this.prisma.subscription.count({
-      where: { status: 'PAST_DUE' }
+      where: {
+        organizationId: { not: ADMIN_ORG_ID },
+        status: 'PAST_DUE'
+      }
     });
 
     // Estimate unpaid amount from PAST_DUE subscriptions
     const unpaidSubs = await this.prisma.subscription.findMany({
-      where: { status: 'PAST_DUE' },
+      where: {
+        organizationId: { not: ADMIN_ORG_ID },
+        status: 'PAST_DUE'
+      },
       select: { plan: true }
     });
     const unpaidAmount = unpaidSubs.reduce((sum, sub) => sum + (planPrices[sub.plan] || 0), 0);
@@ -1279,16 +1494,22 @@ export class AdminService {
     const limit = params.limit || 20;
     const skip = (page - 1) * limit;
 
+    // Plan pricing (based on KPD actual pricing)
     const planPrices: Record<string, number> = {
       FREE: 0,
-      BASIC: 9,
-      PRO: 29,
-      BUSINESS: 99,
-      ENTERPRISE: 299,
+      BASIC: 6.99,
+      PRO: 11.99,
+      BUSINESS: 30.99,
+      ENTERPRISE: 199,
     };
 
-    // Build where clause
-    const where: Record<string, unknown> = {};
+    // Exclude master admin organization from billing stats/list
+    const ADMIN_ORG_ID = 'admin-org-001';
+
+    // Build where clause - exclude admin org
+    const where: Record<string, unknown> = {
+      organizationId: { not: ADMIN_ORG_ID },
+    };
     if (params.status) {
       where.status = params.status.toUpperCase();
     }

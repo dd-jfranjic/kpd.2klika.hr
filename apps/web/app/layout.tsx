@@ -3,6 +3,7 @@ import { Outfit, Plus_Jakarta_Sans, Playfair_Display } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/providers';
 import { AuthProvider } from '@/contexts/auth-context';
+import { CookieConsentBanner } from '@/components/gdpr';
 
 // Premium font configuration
 const outfit = Outfit({
@@ -27,11 +28,11 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   metadataBase: new URL('https://kpd.2klika.hr'),
   title: {
-    default: 'AI KPD Klasifikator | Fiskalizacija 2.0 - AI klasifikacija proizvoda i usluga',
+    default: 'AI KPD Klasifikator | KPD šifre za Fiskalizaciju 2.0',
     template: '%s | AI KPD Klasifikator',
   },
   description:
-    'Od 1.1.2026. KPD šifre su obvezne na eRačunima. Pronađite točnu 6-znamenkastu KPD šifru pomoću AI tehnologije. 3.300+ šifri, jednostavno korištenje. Besplatno za početi.',
+    'Od 1.1.2026. KPD šifre su obvezne na eRačunima. AI pronalazi točnu 6-znamenkastu KPD šifru iz baze od 5.726 šifri. Jednostavno, brzo i besplatno za početi.',
   keywords: [
     'KPD',
     'KPD šifre',
@@ -64,9 +65,9 @@ export const metadata: Metadata = {
     locale: 'hr_HR',
     url: 'https://kpd.2klika.hr',
     siteName: 'AI KPD Klasifikator',
-    title: 'AI KPD Klasifikator | Fiskalizacija 2.0 - AI klasifikacija za eRačune',
+    title: 'AI KPD Klasifikator | KPD šifre za Fiskalizaciju 2.0',
     description:
-      'Od 1.1.2026. KPD šifre su obvezne na eRačunima. Pronađite točnu klasifikaciju proizvoda i usluga pomoću AI tehnologije.',
+      'Od 1.1.2026. KPD šifre su obvezne na eRačunima. AI pronalazi točnu klasifikaciju iz baze od 5.726 šifri. Jednostavno i besplatno.',
     images: [
       {
         url: '/og-image.png',
@@ -122,6 +123,7 @@ export default function RootLayout({
       >
         <AuthProvider>
           <Providers>{children}</Providers>
+          <CookieConsentBanner />
         </AuthProvider>
       </body>
     </html>

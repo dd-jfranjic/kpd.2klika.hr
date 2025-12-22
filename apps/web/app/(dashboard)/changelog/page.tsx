@@ -6,6 +6,79 @@ import { FileText, Calendar, Sparkles, Bug, Wrench, Zap } from 'lucide-react';
 // Changelog entries - add new entries at the top
 const changelogEntries = [
   {
+    version: 'v1.3.0',
+    date: '2025-12-19',
+    title: 'Fleksibilne opcije plaćanja',
+    changes: [
+      {
+        type: 'feature',
+        description: 'Jednokratna kupnja - svi planovi sada dostupni i kao jednokratna kupnja gdje upiti nikad ne istječu',
+      },
+      {
+        type: 'feature',
+        description: 'Query Booster - kupite dodatnih 10 upita za 6,99 EUR koji nikad ne istječu',
+      },
+      {
+        type: 'feature',
+        description: 'Billing Toggle - jednostavno prebacivanje između mjesečne pretplate i jednokratne kupnje na svakom planu',
+      },
+      {
+        type: 'improvement',
+        description: 'Jasniji prikaz cijena i opcija plaćanja na stranici s cijenama',
+      },
+      {
+        type: 'improvement',
+        description: 'Dodani Enterprise plan (199 EUR, 2500 upita) za velike organizacije',
+      },
+    ],
+  },
+  {
+    version: 'v1.2.0',
+    date: '2025-12-17',
+    title: 'Mobilna navigacija i GDPR usklađenost',
+    changes: [
+      {
+        type: 'feature',
+        description: 'Novi mobilni izbornik - premium hamburger meni s brzim pristupom svim funkcijama',
+      },
+      {
+        type: 'feature',
+        description: 'GDPR usklađenost - upravljanje privolama za kolačiće s mogućnošću prilagodbe',
+      },
+      {
+        type: 'improvement',
+        description: 'Poboljšano korisničko iskustvo na mobilnim uređajima',
+      },
+      {
+        type: 'improvement',
+        description: 'Optimizirano učitavanje stranica',
+      },
+    ],
+  },
+  {
+    version: 'v1.1.0',
+    date: '2025-12-16',
+    title: 'Poboljšana stabilnost i performanse',
+    changes: [
+      {
+        type: 'improvement',
+        description: 'Značajno poboljšana pouzdanost AI upita - sustav sada automatski pokušava ponovno ako dođe do privremene greške',
+      },
+      {
+        type: 'improvement',
+        description: 'Brži odgovori za ponovljene upite zahvaljujući naprednom sustavu predmemoriranja',
+      },
+      {
+        type: 'improvement',
+        description: 'Bolja podrška za više istovremenih korisnika',
+      },
+      {
+        type: 'fix',
+        description: 'Ispravljene poruke o greškama - sada su jasnije i na hrvatskom jeziku',
+      },
+    ],
+  },
+  {
     version: 'v1.0.0',
     date: '2025-12-14',
     title: 'Inicijalno izdanje',
@@ -104,8 +177,8 @@ export default function ChangelogPage() {
       <div className="mt-8 text-center text-sm text-gray-500">
         <p>
           Imate prijedlog za poboljšanje? Kontaktirajte nas na{' '}
-          <a href="mailto:info@2klika.hr" className="text-primary-600 hover:underline">
-            info@2klika.hr
+          <a href="mailto:kpd@2klika.hr" className="text-primary-600 hover:underline">
+            kpd@2klika.hr
           </a>
         </p>
       </div>

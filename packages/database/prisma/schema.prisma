@@ -1,7 +1,7 @@
 // ===========================================
 // KPD 2klika - Prisma Schema
-// Version: 2.0 (Fresh Start)
-// Date: 2025-12-13
+// Version: 2.1 (GDPR Compliance)
+// Date: 2025-12-17
 // ===========================================
 
 generator client {
@@ -37,6 +37,7 @@ model Organization {
   subscription      Subscription?
   usageRecords      UsageRecord[]
   invitations       Invitation[]
+  purchases         Purchase[]   // Added 2025-12-19
 
   @@index([stripeCustomerId])
 }
@@ -63,6 +64,12 @@ model User {
   failedLoginAttempts Int      @default(0)
   lockedUntil         DateTime?
 
+  // GDPR: Registration metadata (nullable for backward compat)
+  registrationIp      String?
+  registrationAgent   String?
+  dataExportedAt      DateTime?  // Last data export timestamp
+  deletionRequestedAt DateTime?  // Pending deletion date
+
   // Timestamps
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -72,6 +79,12 @@ model User {
   sentInvitations   Invitation[]
   auditLogs         AuditLog[]
   refreshTokens     RefreshToken[]
+
+  // GDPR Relations
+  consents            UserConsent[]
+  gdprRequests        GdprRequest[]
+  processedGdprRequests GdprRequest[] @relation("ProcessedBy")
+  cookieConsent       CookieConsent?
 
   @@index([email])
 }
@@ -154,6 +167,9 @@ model Subscription {
   plan                  PlanType @default(FREE)
   status                SubscriptionStatus @default(ACTIVE)
 
+  // Billing Type (Added 2025-12-19)
+  billingType           BillingType @default(SUBSCRIPTION)
+
   // Billing Cycle
   currentPeriodStart    DateTime?
   currentPeriodEnd      DateTime?
@@ -162,6 +178,9 @@ model Subscription {
   // Usage Limits (iz PlanConfig)
   dailyQueryLimit       Int      @default(5)
   monthlyQueryLimit     Int?     // null = unlimited
+
+  // Bonus Query Quota (Added 2025-12-19) - Kupljeni upiti koji NE RESETIRAJU se mjesečno
+  bonusQueryQuota       Int      @default(0)
 
   // Timestamps
   createdAt             DateTime @default(now())
@@ -187,6 +206,63 @@ enum SubscriptionStatus {
   CANCELLED
   TRIALING
   PAUSED
+}
+
+// =====================================
+// ONE-TIME BILLING ENUMS (Added 2025-12-19)
+// =====================================
+
+enum BillingType {
+  SUBSCRIPTION  // Mjesečna pretplata (recurring)
+  ONE_TIME      // Jednokratna kupnja
+}
+
+enum PurchaseType {
+  ONE_TIME_PLAN   // Jednokratni paket (BASIC/PRO/BUSINESS/ENTERPRISE)
+  QUERY_BOOSTER   // Dodatni upiti (10 za 6.99 EUR)
+  MANUAL_GRANT    // Admin dodijelio besplatno
+}
+
+enum PurchaseStatus {
+  PENDING     // Čeka plaćanje
+  COMPLETED   // Plaćeno i primijenjeno
+  REFUNDED    // Vraćen novac
+}
+
+// =====================================
+// ONE-TIME PURCHASES (Added 2025-12-19)
+// =====================================
+
+model Purchase {
+  id                      String         @id @default(cuid())
+  organizationId          String
+
+  // Stripe veza
+  stripePaymentIntentId   String?        @unique
+  stripeCheckoutSessionId String?
+
+  // Produkt info
+  productType             PurchaseType
+  productName             String
+  priceEur                Float
+
+  // Benefit
+  queriesIncluded         Int
+
+  // Status
+  status                  PurchaseStatus @default(PENDING)
+  purchasedAt             DateTime?
+  refundedAt              DateTime?
+  refundReason            String?
+
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+
+  organization            Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([productType])
 }
 
 // =====================================
@@ -287,6 +363,9 @@ model Query {
   confidence     Float?
   latencyMs      Int?
   cached         Boolean  @default(false)
+  explanation    String?  // AI objašnjenje s aspektom (npr. "Ova šifra opisuje... - ASPEKT: PROIZVOD")
+  sector         String?  // Sektor (npr. "Sektor C - Prerađivačka industrija")
+  suggestionsData Json?   // Puni podaci za SVE predložene šifre [{code, name, confidence, reason, sector}]
 
   // Context
   ipAddress      String?
@@ -329,25 +408,29 @@ enum ConfigType {
 }
 
 model PlanConfig {
-  id                String   @id @default(cuid())
-  plan              PlanType @unique
+  id                   String   @id @default(cuid())
+  plan                 PlanType @unique
 
-  // Pricing
-  monthlyPriceEur   Float
-  stripePriceId     String?
-  stripeProductId   String?
+  // Pricing - Monthly Subscription
+  monthlyPriceEur      Float
+  stripePriceId        String?
+  stripeProductId      String?
+
+  // Pricing - One-Time Purchase (Added 2025-12-19)
+  oneTimePriceEur      Float?            // null = same as monthly
+  stripeOneTimePriceId String?
 
   // Limits
-  dailyQueryLimit   Int
-  monthlyQueryLimit Int?     // null = unlimited
-  membersLimit      Int?     // null = unlimited
+  dailyQueryLimit      Int
+  monthlyQueryLimit    Int?     // null = unlimited
+  membersLimit         Int?     // null = unlimited
 
   // Features (JSON za fleksibilnost)
-  features          Json     @default("[]")
+  features             Json     @default("[]")
 
   // Display
-  displayName       String
-  description       String?
+  displayName          String
+  description          String?
   isPopular         Boolean  @default(false)
   sortOrder         Int      @default(0)
 
@@ -459,4 +542,114 @@ model RefreshToken {
   @@index([userId])
   @@index([tokenHash])
   @@index([expiresAt])
+}
+
+// =====================================
+// GDPR COMPLIANCE
+// =====================================
+
+// Consent tracking for registration and other user agreements
+model UserConsent {
+  id              String      @id @default(cuid())
+  userId          String
+
+  // Consent type and details
+  consentType     ConsentType
+  granted         Boolean     @default(true)
+  version         String      @default("1.0") // Policy version (e.g., "1.0", "2.0")
+
+  // Audit trail
+  ipAddress       String?
+  userAgent       String?
+
+  // Timestamps
+  grantedAt       DateTime    @default(now())
+  revokedAt       DateTime?
+
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([consentType])
+  @@index([grantedAt])
+}
+
+enum ConsentType {
+  TERMS_OF_SERVICE      // Uvjeti korištenja - obavezno pri registraciji
+  PRIVACY_POLICY        // Politika privatnosti - obavezno pri registraciji
+  MARKETING_EMAILS      // Marketing komunikacija - opcionalno
+  ANALYTICS_COOKIES     // Analitički kolačići
+  MARKETING_COOKIES     // Marketing kolačići
+}
+
+// GDPR data requests (export, deletion)
+model GdprRequest {
+  id              String            @id @default(cuid())
+  userId          String
+
+  requestType     GdprRequestType
+  status          GdprRequestStatus @default(PENDING)
+
+  // Request details
+  reason          String?           // User's reason (for deletion)
+  notes           String?           // Admin notes
+
+  // Processing info
+  processedById   String?           // Admin who processed
+  processedAt     DateTime?
+
+  // For data export
+  exportUrl       String?           // Temporary download URL
+  exportExpiresAt DateTime?         // Export link expiry (24h)
+
+  // Timestamps
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  processedBy     User?             @relation("ProcessedBy", fields: [processedById], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([requestType])
+  @@index([createdAt])
+}
+
+enum GdprRequestType {
+  DATA_EXPORT       // Članak 15 - Pravo pristupa podacima
+  DATA_DELETION     // Članak 17 - Pravo na brisanje
+}
+
+enum GdprRequestStatus {
+  PENDING           // Čeka obradu
+  PROCESSING        // U obradi
+  COMPLETED         // Završeno
+  REJECTED          // Odbijeno (s razlogom)
+  CANCELLED         // Korisnik odustao
+}
+
+// Cookie consent for visitors (may or may not be logged in)
+model CookieConsent {
+  id              String      @id @default(cuid())
+
+  // Visitor identification
+  visitorId       String      @unique  // UUID stored in browser cookie
+  userId          String?     @unique  // Link to user if logged in
+
+  // Consent categories
+  necessary       Boolean     @default(true)   // Always true, required
+  analytics       Boolean     @default(false)  // Google Analytics, etc.
+  marketing       Boolean     @default(false)  // Advertising, remarketing
+
+  // Audit
+  ipAddress       String?
+  userAgent       String?
+
+  // Timestamps
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([visitorId])
+  @@index([userId])
 }

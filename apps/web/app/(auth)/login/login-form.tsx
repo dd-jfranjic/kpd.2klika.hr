@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/auth-context';
 import styles from './login.module.css';
 
 export default function LoginForm() {
-  const { login, user, loading: authLoading } = useAuth();
+  const { login, user, loading: authLoading, isAdmin } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState('');
@@ -18,7 +18,9 @@ export default function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const redirectUrl = searchParams.get('redirect') || '/dashboard';
+  const redirectParam = searchParams.get('redirect');
+  // Admin users always go to /admin, regular users use redirect param or /dashboard
+  const redirectUrl = isAdmin ? '/admin' : (redirectParam || '/dashboard');
 
   useEffect(() => {
     setMounted(true);
@@ -29,7 +31,7 @@ export default function LoginForm() {
     if (!authLoading && user) {
       router.push(redirectUrl);
     }
-  }, [user, authLoading, router, redirectUrl]);
+  }, [user, authLoading, router, redirectUrl, isAdmin]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

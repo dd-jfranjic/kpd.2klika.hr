@@ -5,6 +5,7 @@ import {
   ChevronDown,
   HelpCircle,
 } from 'lucide-react';
+import { BackToTop } from '@/components/back-to-top';
 
 export const metadata: Metadata = {
   title: 'Često postavljana pitanja | AI KPD Klasifikator',
@@ -74,7 +75,7 @@ const faqItems: FAQItem[] = [
     category: 'AI KPD Klasifikator',
     question: 'Mogu li koristiti klasifikator besplatno?',
     answer:
-      'Da! Nudimo besplatni plan s 50 klasifikacija mjesečno. Za veće potrebe, dostupni su plaćeni planovi koji nude više klasifikacija, dodatne značajke poput batch obrade i prioritetnu podršku.',
+      'Da! Nudimo besplatni plan s 3 AI upita mjesečno za isprobavanje. Za veće potrebe, dostupni su plaćeni planovi: Basic (6,99 EUR, 10 upita), Pro (11,99 EUR, 20 upita), Business (30,99 EUR, 50 upita) i Enterprise (199 EUR, 2500 upita). Svaki plan možete odabrati kao mjesečnu pretplatu ili jednokratnu kupnju gdje upiti nikad ne istječu.',
   },
   {
     category: 'AI KPD Klasifikator',
@@ -93,13 +94,13 @@ const faqItems: FAQItem[] = [
     category: 'Tehnička pitanja',
     question: 'Jesu li moji podaci sigurni?',
     answer:
-      'Apsolutno. Koristimo enkripciju za sve podatke u prijenosu i na pohrani. Vaši opisi proizvoda i klasifikacije nisu dijeljeni s trećim stranama. Sustav je u skladu s GDPR propisima.',
+      'Da. Koristimo enkripciju za sve podatke u prijenosu i na pohrani. Vaši opisi se šalju Google AI servisu isključivo za potrebe klasifikacije i ne pohranjuju se trajno na njihovim serverima. Sustav je u skladu s GDPR propisima.',
   },
   {
     category: 'Tehnička pitanja',
     question: 'Postoji li API za integraciju?',
     answer:
-      'Trenutno radimo na API-ju koji će omogućiti direktnu integraciju s vašim sustavima. Kontaktirajte nas na info@2klika.hr za više informacija o beta pristupstvu.',
+      'Trenutno radimo na API-ju koji će omogućiti direktnu integraciju s vašim sustavima. Kontaktirajte nas na kpd@2klika.hr za više informacija o beta pristupu.',
   },
   // Planovi i plaćanje
   {
@@ -112,7 +113,7 @@ const faqItems: FAQItem[] = [
     category: 'Planovi i plaćanje',
     question: 'Kako funkcionira naplata?',
     answer:
-      'Naplata se vrši mjesečno putem kartice (Visa, Mastercard). Možete otkazati pretplatu u bilo kojem trenutku. Nakon otkazivanja, zadržavate pristup do kraja plaćenog razdoblja.',
+      'Nudimo dva načina plaćanja: mjesečnu pretplatu ili jednokratnu kupnju. Kod mjesečne pretplate, naplata se vrši putem kartice (Visa, Mastercard) i možete otkazati u bilo kojem trenutku. Kod jednokratne kupnje, platite jednom i upiti nikad ne istječu. Također nudimo Query Booster - 10 dodatnih upita za 6,99 EUR koji nikad ne istječu.',
   },
   {
     category: 'Planovi i plaćanje',
@@ -136,7 +137,7 @@ export default function FAQPage() {
             </div>
             <div className="kpd-logo__text-group">
               <span className="kpd-logo__text">AI KPD Klasifikator</span>
-              <span className="kpd-logo__subtext">asistent by 2klika</span>
+              <span className="kpd-logo__subtext">created by 2klika</span>
             </div>
           </Link>
 
@@ -169,21 +170,23 @@ export default function FAQPage() {
       {/* Hero Section */}
       <section className="kpd-hero kpd-hero--compact">
         <div className="kpd-hero__bg"></div>
-        <div className="kpd-hero__content">
-          <div className="kpd-hero__badge">
-            <HelpCircle className="kpd-hero__badge-icon" />
-            <span>Pomoć i podrška</span>
+        <div className="kpd-container">
+          <div className="kpd-hero__content kpd-hero__content--centered">
+            <div className="kpd-hero__badge">
+              <HelpCircle className="kpd-hero__badge-icon" />
+              <span>Pomoć i podrška</span>
+            </div>
+
+            <h1 className="kpd-heading-1">
+              Često postavljana
+              <span className="kpd-text-gradient"> pitanja</span>
+            </h1>
+
+            <p className="kpd-hero__subtitle">
+              Pronađite odgovore na najčešća pitanja o KPD klasifikaciji,
+              Fiskalizaciji 2.0 i korištenju AI KPD Klasifikatora.
+            </p>
           </div>
-
-          <h1 className="kpd-heading-1">
-            Često postavljana
-            <span className="kpd-text-gradient"> pitanja</span>
-          </h1>
-
-          <p className="kpd-hero__subtitle">
-            Pronađite odgovore na najčešća pitanja o KPD klasifikaciji,
-            Fiskalizaciji 2.0 i korištenju AI KPD Klasifikatora.
-          </p>
         </div>
       </section>
 
@@ -221,8 +224,8 @@ export default function FAQPage() {
             <h2 className="kpd-cta__title">Niste pronašli odgovor?</h2>
             <p className="kpd-cta__subtitle">
               Kontaktirajte nas na{' '}
-              <a href="mailto:info@2klika.hr" className="kpd-cta__link">
-                info@2klika.hr
+              <a href="mailto:kpd@2klika.hr" className="kpd-cta__link">
+                kpd@2klika.hr
               </a>{' '}
               i rado ćemo vam pomoći.
             </p>
@@ -259,7 +262,7 @@ export default function FAQPage() {
                     AI KPD Klasifikator
                   </span>
                   <span className="kpd-logo__subtext kpd-logo__subtext--light">
-                    asistent by 2klika
+                    created by 2klika
                   </span>
                 </div>
               </Link>
@@ -288,8 +291,8 @@ export default function FAQPage() {
 
               <div className="kpd-footer__column">
                 <h4 className="kpd-footer__heading">Kontakt</h4>
-                <a href="mailto:info@2klika.hr" className="kpd-footer__link">
-                  info@2klika.hr
+                <a href="mailto:kpd@2klika.hr" className="kpd-footer__link">
+                  kpd@2klika.hr
                 </a>
                 <a
                   href="https://2klika.hr"
@@ -314,12 +317,17 @@ export default function FAQPage() {
           </div>
 
           <div className="kpd-footer__bottom">
+            <p className="kpd-footer__disclaimer">
+              AI klasifikacija je pomoćni alat — provjerite KPD šifre prije službene upotrebe.
+            </p>
             <p className="kpd-footer__copyright">
               © {new Date().getFullYear()} 2 KLIKA obrt. Sva prava pridržana.
             </p>
           </div>
         </div>
       </footer>
+
+      <BackToTop />
     </div>
   );
 }

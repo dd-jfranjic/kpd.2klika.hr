@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // Konfiguriraj duži timeout za ovaj route (120 sekundi)
 export const maxDuration = 120;
 
-const API_URL = process.env.API_URL || 'http://api:3000';
+const API_URL = process.env.INTERNAL_API_URL || process.env.API_URL || 'http://api:3000';
 
 export async function POST(request: NextRequest) {
   try {

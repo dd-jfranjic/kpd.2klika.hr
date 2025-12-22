@@ -13,10 +13,11 @@ import {
   History,
   CreditCard,
   ExternalLink,
+  Shield,
 } from 'lucide-react';
 
 // App version - update this with each release
-const APP_VERSION = 'v1.0.0';
+const APP_VERSION = 'v1.3.0';
 
 // Admin menu items - ADMINISTRACIJA first, then APLIKACIJA (no user account section for admins)
 const adminNavItems = [
@@ -30,6 +31,7 @@ const adminNavItems = [
       { href: '/admin/kpd-codes', label: 'KPD Šifrarnik', icon: BookOpen },
       { href: '/admin/settings', label: 'Postavke', icon: Settings },
       { href: '/admin/audit', label: 'Audit Log', icon: FileText },
+      { href: '/admin/gdpr', label: 'GDPR', icon: Shield },
     ]
   },
   {

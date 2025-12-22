@@ -43,7 +43,7 @@ RUN pnpm --filter @kpd/feature-flags build
 RUN pnpm --filter @kpd/api build
 
 # Deploy API with all dependencies bundled
-RUN pnpm --filter @kpd/api deploy --prod /app/deploy
+RUN rm -rf /app/deploy && pnpm --filter @kpd/api deploy --prod /app/deploy
 
 # ============================================
 # Stage 2: Production

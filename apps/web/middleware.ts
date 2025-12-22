@@ -13,6 +13,10 @@ const PUBLIC_ROUTES = [
   '/verify-email',
   '/forgot-password',
   '/reset-password',
+  '/privacy',
+  '/terms',
+  '/faq',
+  '/changelog',
 ];
 
 // Routes that start with these prefixes are public
@@ -21,6 +25,7 @@ const PUBLIC_PREFIXES = [
   '/api/health',
   '/api/v1/auth',
   '/api/v1/kpd', // Public KPD search
+  '/api/v1/gdpr/cookies', // Public cookie consent
 ];
 
 function isPublicRoute(pathname: string): boolean {

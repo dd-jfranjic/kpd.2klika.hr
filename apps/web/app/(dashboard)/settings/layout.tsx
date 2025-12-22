@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { User, Building2, Users, CreditCard } from 'lucide-react';
+import { User, Building2, Users, CreditCard, Shield } from 'lucide-react';
 
 const settingsNav = [
   { href: '/settings/profile', label: 'Profil', icon: User },
   { href: '/settings/workspace', label: 'Workspace', icon: Building2 },
   { href: '/settings/members', label: 'Članovi tima', icon: Users },
   { href: '/settings/billing', label: 'Naplata', icon: CreditCard },
+  { href: '/settings/privacy', label: 'Privatnost', icon: Shield },
 ];
 
 interface SettingsLayoutProps {

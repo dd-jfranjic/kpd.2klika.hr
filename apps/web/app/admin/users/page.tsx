@@ -44,7 +44,7 @@ interface User {
   };
 }
 
-type TabType = 'all' | 'active' | 'suspended' | 'near_limit';
+type TabType = 'all' | 'active' | 'suspended' | 'at_limit' | 'near_limit';
 
 function AdminUsersPageContent() {
   const { user, loading: authLoading, isAdmin, token } = useAuth();
@@ -147,6 +147,7 @@ function AdminUsersPageContent() {
         ...(activeTab === 'suspended' && { suspended: 'true' }),
         ...(activeTab === 'active' && { suspended: 'false' }),
         ...(activeTab === 'near_limit' && { nearLimit: 'true' }),
+        ...(activeTab === 'at_limit' && { atLimit: 'true' }),
         ...(planFilter && { plan: planFilter }),
       });
 
@@ -366,7 +367,7 @@ function AdminUsersPageContent() {
       `🔄 RESETIRANJE POTROŠNJE\n\n` +
       `Jeste li sigurni da želite resetirati mjesečnu potrošnju za "${userEmail}"?\n\n` +
       `Ova akcija će:\n` +
-      `• Obrisati sve upite iz ovog mjeseca\n` +
+      `• Resetirati brojač upita (povijest se čuva)\n` +
       `• Vratiti korisniku pun mjesečni limit`
     );
 
@@ -387,7 +388,7 @@ function AdminUsersPageContent() {
         alert(
           `✅ Potrošnja resetirana!\n\n` +
           `${data.data.message}\n` +
-          `Obrisano upita: ${data.data.deletedQueries}\n` +
+          `Resetiranih upita: ${data.data.resetQueries}\n` +
           `Novi limit: ${data.data.newLimit}`
         );
         fetchUsers();
@@ -406,7 +407,8 @@ function AdminUsersPageContent() {
     { id: 'all', label: 'Svi' },
     { id: 'active', label: 'Aktivni' },
     { id: 'suspended', label: 'Suspendirani' },
-    { id: 'near_limit', label: 'Blizu limita' },
+    { id: 'at_limit', label: 'Dosegnut limit (100%)' },
+    { id: 'near_limit', label: 'Blizu limita (80-99%)' },
   ];
 
   if (authLoading || !user) {

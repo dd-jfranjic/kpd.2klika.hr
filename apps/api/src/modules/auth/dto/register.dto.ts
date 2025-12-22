@@ -5,6 +5,7 @@ import {
   MaxLength,
   Matches,
   IsOptional,
+  IsBoolean,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -45,4 +46,30 @@ export class RegisterDto {
   @IsString()
   @MaxLength(50)
   lastName?: string;
+
+  // =========================================
+  // GDPR CONSENT FIELDS
+  // =========================================
+
+  @ApiProperty({
+    example: true,
+    description: 'Prihvaćanje Uvjeta korištenja (obavezno)',
+  })
+  @IsBoolean({ message: 'Morate prihvatiti Uvjete korištenja' })
+  termsOfService!: boolean;
+
+  @ApiProperty({
+    example: true,
+    description: 'Prihvaćanje Politike privatnosti (obavezno)',
+  })
+  @IsBoolean({ message: 'Morate prihvatiti Politiku privatnosti' })
+  privacyPolicy!: boolean;
+
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Pristanak na primanje marketinških emailova (opcionalno)',
+  })
+  @IsOptional()
+  @IsBoolean()
+  marketingEmails?: boolean;
 }

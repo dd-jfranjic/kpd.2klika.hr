@@ -3,8 +3,10 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Check, Sparkles, Building2, Briefcase, Crown, Loader2 } from 'lucide-react';
+import { Check, Sparkles, Building2, Briefcase, Crown, Loader2, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
+import { BackToTop } from '@/components/back-to-top';
+import { BillingToggle, useBillingToggle } from '@/components/billing';
 
 interface PlanConfig {
   id: string;
@@ -12,6 +14,7 @@ interface PlanConfig {
   displayName: string;
   description: string | null;
   monthlyPriceEur: number;
+  oneTimePriceEur?: number;
   monthlyQueryLimit: number;
   membersLimit: number | null;
   features: string[];
@@ -21,7 +24,7 @@ interface PlanConfig {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api/v1';
 
-// Fallback plans if API fails
+// Fallback plans if API fails - features match billing page exactly
 const fallbackPlans: PlanConfig[] = [
   {
     id: 'free',
@@ -29,13 +32,13 @@ const fallbackPlans: PlanConfig[] = [
     displayName: 'KPD Starter',
     description: 'Za isprobavanje',
     monthlyPriceEur: 0,
+    oneTimePriceEur: 0,
     monthlyQueryLimit: 3,
     membersLimit: 1,
     features: [
-      '3 AI upita mjesečno',
+      '3 upita mjesečno',
       '1 korisnik',
-      'Osnovna pretraga',
-      'Email podrška',
+      'Povijest upita',
     ],
     isPopular: false,
     priceId: null,
@@ -46,14 +49,13 @@ const fallbackPlans: PlanConfig[] = [
     displayName: 'KPD Basic',
     description: 'Za male poduzetnike',
     monthlyPriceEur: 6.99,
+    oneTimePriceEur: 6.99,
     monthlyQueryLimit: 10,
     membersLimit: 2,
     features: [
-      '10 AI upita mjesečno',
-      'Do 2 člana tima',
-      'AI preporuke',
-      'Povijest pretraga',
-      'Email podrška',
+      '10 upita mjesečno',
+      'Do 2 članova tima',
+      'Povijest upita',
     ],
     isPopular: false,
     priceId: null,
@@ -64,14 +66,14 @@ const fallbackPlans: PlanConfig[] = [
     displayName: 'KPD Pro',
     description: 'Za rastuće timove',
     monthlyPriceEur: 11.99,
+    oneTimePriceEur: 11.99,
     monthlyQueryLimit: 20,
     membersLimit: 5,
     features: [
-      '20 AI upita mjesečno',
+      '20 upita mjesečno',
       'Do 5 članova tima',
-      'Napredne AI preporuke',
-      'Povijest pretraga',
-      'Prioritetna podrška',
+      'Povijest upita',
+      'CSV izvoz povijesti',
     ],
     isPopular: true,
     priceId: null,
@@ -82,14 +84,14 @@ const fallbackPlans: PlanConfig[] = [
     displayName: 'KPD Business',
     description: 'Za srednje tvrtke',
     monthlyPriceEur: 30.99,
+    oneTimePriceEur: 30.99,
     monthlyQueryLimit: 50,
     membersLimit: 10,
     features: [
-      '50 AI upita mjesečno',
+      '50 upita mjesečno',
       'Do 10 članova tima',
-      'API pristup',
-      'Analitika korištenja',
-      'Prioritetna podrška 24/7',
+      'Povijest upita',
+      'CSV izvoz povijesti',
     ],
     isPopular: false,
     priceId: null,
@@ -100,15 +102,14 @@ const fallbackPlans: PlanConfig[] = [
     displayName: 'KPD Enterprise',
     description: 'Za velike organizacije',
     monthlyPriceEur: 199,
+    oneTimePriceEur: 199,
     monthlyQueryLimit: 2500,
     membersLimit: null,
     features: [
-      '2500 AI upita mjesečno',
+      '2500 upita mjesečno',
       'Neograničen broj članova',
-      'Dedicirani AI model',
-      'Custom integracije',
-      'SLA garancija',
-      'Osobni account manager',
+      'Povijest upita',
+      'CSV izvoz povijesti',
     ],
     isPopular: false,
     priceId: null,
@@ -130,6 +131,10 @@ export default function PricingPage() {
   const [loading, setLoading] = useState(true);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [checkoutLoading, _setCheckoutLoading] = useState<string | null>(null);
+
+  // Per-card billing type selection (only for paid plans)
+  const paidPlanIds = ['BASIC', 'PRO', 'BUSINESS', 'ENTERPRISE'];
+  const { billingTypes, setBillingType } = useBillingToggle(paidPlanIds);
 
   useEffect(() => {
     async function fetchPlans() {
@@ -191,31 +196,43 @@ export default function PricingPage() {
       <header className="kpd-header">
         <div className="kpd-header__container">
           <Link href="/" className="kpd-logo">
-            <div className="kpd-logo__icon">KPD</div>
+            <div className="kpd-logo__icon">
+              <span>KPD</span>
+            </div>
             <div className="kpd-logo__text-group">
-              <span className="kpd-logo__text">KPD 2klika</span>
-              <span className="kpd-logo__subtext">AI Klasifikator</span>
+              <span className="kpd-logo__text">AI KPD Klasifikator</span>
+              <span className="kpd-logo__subtext">created by 2klika</span>
             </div>
           </Link>
 
           <nav className="kpd-nav">
-            <Link href="/#features" className="kpd-nav__link">Značajke</Link>
-            <Link href="/#how-it-works" className="kpd-nav__link">Kako radi</Link>
-            <Link href="/pricing" className="kpd-nav__link">Cijene</Link>
+            <Link href="/#features" className="kpd-nav__link">
+              Značajke
+            </Link>
+            <Link href="/#how-it-works" className="kpd-nav__link">
+              Kako radi
+            </Link>
+            <Link href="/pricing" className="kpd-nav__link kpd-nav__link--active">
+              Cijene
+            </Link>
+            <Link href="/faq" className="kpd-nav__link">
+              FAQ
+            </Link>
           </nav>
 
           <div className="kpd-header__actions">
             {user ? (
-              <Link href="/dashboard" className="kpd-btn kpd-btn--primary">
+              <Link href="/dashboard" className="kpd-btn kpd-btn--primary kpd-btn--sm">
                 Dashboard
+                <ArrowRight className="kpd-btn__icon" />
               </Link>
             ) : (
               <>
-                <Link href="/login" className="kpd-btn kpd-btn--ghost">
+                <Link href="/login" className="kpd-nav__link">
                   Prijava
                 </Link>
-                <Link href="/register" className="kpd-btn kpd-btn--primary">
-                  Započni besplatno
+                <Link href="/register" className="kpd-btn kpd-btn--primary kpd-btn--sm">
+                  Registracija
                 </Link>
               </>
             )}
@@ -245,64 +262,94 @@ export default function PricingPage() {
             </div>
           ) : (
             <div className="kpd-pricing-grid">
-              {plans.map((plan) => (
-                <div
-                  key={plan.id}
-                  className={`kpd-pricing-card ${plan.isPopular ? 'kpd-pricing-card--popular' : ''}`}
-                >
-                  {plan.isPopular && (
-                    <div className="kpd-pricing-card__badge">Najpopularniji</div>
-                  )}
+              {plans.map((plan) => {
+                const isPaid = plan.plan !== 'FREE';
+                const billingType = isPaid ? billingTypes[plan.plan] : 'monthly';
+                const isOnetime = billingType === 'onetime';
+                const displayPrice = isOnetime
+                  ? (plan.oneTimePriceEur ?? plan.monthlyPriceEur)
+                  : plan.monthlyPriceEur;
 
-                  <div className="kpd-pricing-card__header">
-                    {planIcons[plan.plan]}
-                    <div className="kpd-pricing-card__name">{plan.displayName}</div>
-                  </div>
+                return (
+                  <div
+                    key={plan.id}
+                    className={`kpd-pricing-card ${plan.isPopular ? 'kpd-pricing-card--popular' : ''}`}
+                  >
+                    {plan.isPopular && (
+                      <div className="kpd-pricing-card__badge">Najpopularniji</div>
+                    )}
 
-                  <div className="kpd-pricing-card__price">
-                    <span className="kpd-pricing-card__amount">
-                      {plan.monthlyPriceEur === 0 ? '0' : plan.monthlyPriceEur.toFixed(2).replace('.', ',')}
-                    </span>
-                    <span className="kpd-pricing-card__currency">EUR</span>
-                    <span className="kpd-pricing-card__period">/mjesečno</span>
-                  </div>
+                    <div className="kpd-pricing-card__header">
+                      {planIcons[plan.plan]}
+                      <div className="kpd-pricing-card__name">{plan.displayName}</div>
+                    </div>
 
-                  <div className="kpd-pricing-card__queries">
-                    {plan.monthlyQueryLimit} upita mjesečno
-                    {plan.membersLimit ? ` · ${plan.membersLimit} član${plan.membersLimit > 1 ? 'a' : ''}` : ' · Neograničeno članova'}
-                  </div>
-
-                  <div className="kpd-pricing-card__features">
-                    {plan.features.map((feature, idx) => (
-                      <div key={idx} className="kpd-pricing-card__feature">
-                        <Check className="kpd-pricing-card__check" />
-                        <span>{feature}</span>
+                    {/* Billing Toggle for paid plans */}
+                    {isPaid && (
+                      <div className="kpd-pricing-card__billing-toggle">
+                        <BillingToggle
+                          value={billingType}
+                          onChange={(type) => setBillingType(plan.plan, type)}
+                          size="sm"
+                        />
                       </div>
-                    ))}
-                  </div>
+                    )}
 
-                  <div className="kpd-pricing-card__cta">
-                    <button
-                      onClick={() => handleSelectPlan(plan)}
-                      disabled={checkoutLoading === plan.id}
-                      className={`kpd-btn kpd-btn--full ${
-                        plan.isPopular ? 'kpd-btn--primary' : 'kpd-btn--secondary'
-                      }`}
-                    >
-                      {checkoutLoading === plan.id ? (
-                        <>
-                          <Loader2 className="kpd-btn__spinner" />
-                          Učitavanje...
-                        </>
-                      ) : plan.plan === 'FREE' ? (
-                        'Započni besplatno'
-                      ) : (
-                        'Odaberi plan'
+                    <div className="kpd-pricing-card__price">
+                      <span className="kpd-pricing-card__amount">
+                        {displayPrice === 0 ? '0' : displayPrice.toFixed(2).replace('.', ',')}
+                      </span>
+                      <span className="kpd-pricing-card__currency">EUR</span>
+                      <span className="kpd-pricing-card__period">
+                        {isOnetime ? ' jednokratno' : '/mjesečno'}
+                      </span>
+                    </div>
+
+                    <div className="kpd-pricing-card__queries">
+                      {plan.monthlyQueryLimit} upita{isOnetime ? '' : ' mjesečno'}
+                      {plan.membersLimit ? ` · ${plan.membersLimit} član${plan.membersLimit > 1 ? 'a' : ''}` : ' · Neograničeno članova'}
+                    </div>
+
+                    <div className="kpd-pricing-card__features">
+                      {plan.features.map((feature, idx) => (
+                        <div key={idx} className="kpd-pricing-card__feature">
+                          <Check className="kpd-pricing-card__check" />
+                          <span>{feature}</span>
+                        </div>
+                      ))}
+                      {isOnetime && (
+                        <div className="kpd-pricing-card__feature kpd-pricing-card__feature--highlight">
+                          <Check className="kpd-pricing-card__check" />
+                          <span>Upiti nikad ne istječu</span>
+                        </div>
                       )}
-                    </button>
+                    </div>
+
+                    <div className="kpd-pricing-card__cta">
+                      <button
+                        onClick={() => handleSelectPlan(plan)}
+                        disabled={checkoutLoading === plan.id}
+                        className={`kpd-btn kpd-btn--full ${
+                          plan.isPopular ? 'kpd-btn--primary' : 'kpd-btn--secondary'
+                        }`}
+                      >
+                        {checkoutLoading === plan.id ? (
+                          <>
+                            <Loader2 className="kpd-btn__spinner" />
+                            Učitavanje...
+                          </>
+                        ) : plan.plan === 'FREE' ? (
+                          'Započni besplatno'
+                        ) : isOnetime ? (
+                          'Kupi jednokratno'
+                        ) : (
+                          'Pretplati se'
+                        )}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -321,13 +368,107 @@ export default function PricingPage() {
       {/* Footer */}
       <footer className="kpd-footer">
         <div className="kpd-container">
+          <div className="kpd-footer__content">
+            <div className="kpd-footer__brand">
+              <Link href="/" className="kpd-logo">
+                <div className="kpd-logo__icon">
+                  <span>KPD</span>
+                </div>
+                <div className="kpd-logo__text-group">
+                  <span className="kpd-logo__text kpd-logo__text--light">
+                    AI KPD Klasifikator
+                  </span>
+                  <span className="kpd-logo__subtext kpd-logo__subtext--light">
+                    created by 2klika
+                  </span>
+                </div>
+              </Link>
+              <p className="kpd-footer__tagline">
+                AI klasifikacija proizvoda i usluga prema KPD standardu za
+                hrvatske poduzetnike i računovođe.
+              </p>
+            </div>
+
+            <div className="kpd-footer__links">
+              <div className="kpd-footer__column">
+                <h4 className="kpd-footer__heading">Proizvod</h4>
+                <Link href="/#features" className="kpd-footer__link">
+                  Značajke
+                </Link>
+                <Link href="/pricing" className="kpd-footer__link">
+                  Cijene
+                </Link>
+                <Link href="/#how-it-works" className="kpd-footer__link">
+                  Kako radi
+                </Link>
+                <Link href="/faq" className="kpd-footer__link">
+                  FAQ
+                </Link>
+              </div>
+
+              <div className="kpd-footer__column">
+                <h4 className="kpd-footer__heading">Kontakt</h4>
+                <a href="mailto:info@2klika.hr" className="kpd-footer__link">
+                  info@2klika.hr
+                </a>
+                <a
+                  href="https://2klika.hr"
+                  className="kpd-footer__link"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  www.2klika.hr
+                </a>
+              </div>
+
+              <div className="kpd-footer__column">
+                <h4 className="kpd-footer__heading">Pravno</h4>
+                <Link href="/privacy" className="kpd-footer__link">
+                  Privatnost
+                </Link>
+                <Link href="/terms" className="kpd-footer__link">
+                  Uvjeti korištenja
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Business Info Section */}
+          <div className="kpd-footer__business">
+            <div className="kpd-footer__business-main">
+              <h4 className="kpd-footer__heading">2 KLIKA</h4>
+              <p className="kpd-footer__business-text">
+                Obrt za promidžbu i računalne djelatnosti
+                <br />
+                vl. Josip Franjić
+                <br />
+                Kašinski odvojak 20a, 10360 Sesvete
+                <br />
+                OIB: 99991580018 | MBS: 97131652
+              </p>
+            </div>
+            <div className="kpd-footer__business-partner">
+              <h4 className="kpd-footer__heading">Partner za naplatu</h4>
+              <p className="kpd-footer__business-text">
+                ANGARA d.o.o.
+                <br />
+                OIB: 95745406877
+              </p>
+            </div>
+          </div>
+
           <div className="kpd-footer__bottom">
+            <p className="kpd-footer__disclaimer">
+              AI klasifikacija je pomoćni alat — provjerite KPD šifre prije službene upotrebe.
+            </p>
             <p className="kpd-footer__copyright">
-              © {new Date().getFullYear()} KPD 2klika. Sva prava pridržana.
+              © {new Date().getFullYear()} 2 KLIKA obrt. Sva prava pridržana.
             </p>
           </div>
         </div>
       </footer>
+
+      <BackToTop />
     </div>
   );
 }

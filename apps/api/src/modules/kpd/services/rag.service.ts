@@ -14,6 +14,27 @@ interface RagSuggestion {
 }
 
 /**
+ * Konfiguracija za retry logiku i rate limiting
+ */
+interface RetryConfig {
+  maxRetries: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+  jitterMs: number;
+}
+
+/**
+ * Request queue item za kontrolirano slanje zahtjeva
+ */
+interface QueuedRequest {
+  prompt: string;
+  resolve: (value: string) => void;
+  reject: (error: Error) => void;
+  retryCount: number;
+  addedAt: number;
+}
+
+/**
  * RAG Service - Google Gemini File Search API
  *
  * Koristi Google Gemini za pretragu KPD šifara s File Search grounding.
@@ -31,6 +52,36 @@ export class RagService implements OnModuleInit {
   private geminiModel: string = 'gemini-2.5-flash';
   private isInitialized = false;
   private prisma = new PrismaClient();
+
+  // ============================================
+  // PREMIUM ERROR HANDLING & RATE LIMITING
+  // ============================================
+
+  // Retry konfiguracija za Gemini API
+  private readonly retryConfig: RetryConfig = {
+    maxRetries: 5,           // Maksimalno 5 pokušaja
+    baseDelayMs: 1000,       // Početni delay 1 sekunda
+    maxDelayMs: 32000,       // Maksimalni delay 32 sekunde
+    jitterMs: 500,           // Random jitter ±500ms
+  };
+
+  // Request queue za kontrolirano slanje zahtjeva
+  private requestQueue: QueuedRequest[] = [];
+  private isProcessingQueue = false;
+  private readonly maxConcurrentRequests = 8;  // Tier 1 ima 1000 RPM, ali budimo konzervativni
+  private activeRequests = 0;
+  private readonly minRequestIntervalMs = 100; // Min 100ms između zahtjeva
+  private lastRequestTime = 0;
+
+  // Statistike za monitoring
+  private stats = {
+    totalRequests: 0,
+    successfulRequests: 0,
+    failedRequests: 0,
+    retriedRequests: 0,
+    rateLimitHits: 0,
+    averageLatencyMs: 0,
+  };
 
   constructor(private configService: ConfigService) {}
 
@@ -97,12 +148,119 @@ export class RagService implements OnModuleInit {
     return this.isInitialized && this.client !== null;
   }
 
+  // ============================================
+  // CONTENT MODERATION - Pre-check za ilegalne upite
+  // ============================================
+
+  /**
+   * Provjeri je li upit eksplicitno ilegalan
+   * Vraća true ako upit sadrži eksplicitno ilegalne pojmove
+   *
+   * NAPOMENA: Ovo NE blokira legitimne poslovne upite kao:
+   * - "prodaja lijekova" (ljekarne)
+   * - "trgovina oružjem" (oružarnice s licencom)
+   * - "kemikalije" (industrijska kemija)
+   */
+  private isExplicitlyIllegal(query: string): boolean {
+    const normalizedQuery = query.toLowerCase().trim();
+
+    // Eksplicitno ilegalni pojmovi - nema legitimne poslovne primjene
+    const illegalPatterns = [
+      // Krijumčarenje i crno tržište
+      /krijum[čc]ar/i,
+      /crno\s*tr[zž]i[sš]t/i,
+      /dark\s*web/i,
+      /darkweb/i,
+      /deep\s*web\s*(prodaja|kupovina)/i,
+
+      // Pranje novca i financijski kriminal
+      /pranje\s*novca/i,
+      /money\s*launder/i,
+      /utaja\s*(poreza|novca)/i,
+      /porezna\s*prijevar/i,
+      /financijska\s*prijevar/i,
+
+      // Terorizam
+      /teroriz/i,
+      /teroristi[čc]/i,
+      /eksploziv.*napad/i,
+      /napad.*eksploziv/i,
+      /bomba[sš]ki\s*napad/i,
+      /masovno\s*(ubijanje|nasilje)/i,
+      /oru[žz]ani\s*napad/i,
+
+      // Nasilje i teške tjelesne ozljede
+      /nasilje/i,
+      /mu[čc]enje/i,
+      /uboj(stvo|ica)/i,
+      /silovanje/i,
+      /zlostavljanje/i,
+      /fizi[čc]ki\s*napad/i,
+      /te[sš]k[ae]\s*tjelesn[ae]/i,
+
+      // Trgovina ljudima i eksploatacija
+      /trgovina\s*ljudima/i,
+      /dje[čc]ja\s*pornografija/i,
+      /seksualno\s*iskor/i,
+      /prostitucij/i,
+      /pedofil/i,
+      /maloljetni[čc]/i,
+
+      // Teška kriminalna djela
+      /razbojni[sš]tv/i,
+      /plja[čc]k/i,
+      /otmic/i,
+      /kidnapovan/i,
+      /iznud/i,
+      /ucjen/i,
+      /reketaren/i,
+      /sabota[zž]/i,
+      /[sš]pijuna[zž]/i,
+      /cyber\s*napad/i,
+      /haker.*napad/i,
+      /hakiranj/i,
+      /kra[dđ].*identitet/i,
+      /falsifik/i,
+      /krivotvor/i,
+
+      // Ilegalno oružje i eksplozivi
+      /ilegalno\s*oru[zž]j/i,
+      /nelegalno\s*oru[zž]j/i,
+      /nabav.*eksploziv/i,
+      /izrad.*bomb/i,
+      /izrad.*eksploziv/i,
+
+      // Droge - sleng termini (NE blokira "lijekovi", "farmaceutski")
+      /prodaj.*drog[eu]/i,
+      /diler.*drog/i,
+      /drog.*diler/i,
+      /(trava|marihuana|hasis|kokain|heroin|speed|mdma|ecstasy).*prodaj/i,
+      /prodaj.*(trava|marihuana|hasis|kokain|heroin|speed|mdma|ecstasy)/i,
+      /narkotik/i,
+      /opojn[ae]\s*sredstv/i,
+    ];
+
+    const isIllegal = illegalPatterns.some(pattern => pattern.test(normalizedQuery));
+
+    if (isIllegal) {
+      this.logger.warn(`Blokiran eksplicitno ilegalan upit: "${query}"`);
+    }
+
+    return isIllegal;
+  }
+
   /**
    * Pretraži KPD šifre korištenjem Gemini AI
    */
   async searchKpd(query: string): Promise<RagSuggestion[]> {
     if (!this.isReady()) {
       this.logger.warn('RAG service nije spreman, vraćam prazan rezultat');
+      return [];
+    }
+
+    // Content moderation - blokiraj eksplicitno ilegalne upite
+    if (this.isExplicitlyIllegal(query)) {
+      this.logger.warn(`Upit blokiran zbog content policy: "${query}"`);
       return [];
     }
 
@@ -226,7 +384,12 @@ PRIMJER ISPRAVNOG ODGOVORA:
 - Format: XX.XX.XX (npr. 96.04.10, 62.20.30)
 - Format reason: "Objašnjenje - ASPEKT: naziv" (ASPEKT ide NA KRAJ!)
 - Uvijek uključi originalnu šifru s objašnjenjem
-- Ako šifra nije prikladna, dodaj 2-3 bolje alternative`;
+- Ako šifra nije prikladna, dodaj 2-3 bolje alternative
+
+🛡️ CONTENT POLICY:
+1. UVIJEK koristi NEUTRALNA, SLUŽBENA objašnjenja
+2. NIKADA ne objašnjavaj u kontekstu ilegalnih aktivnosti
+3. Za osjetljive artikle naglasi LEGALNI kontekst i potrebne dozvole`;
   }
 
   private buildMultiServicePrompt(query: string): string {
@@ -278,7 +441,12 @@ PRIMJER ISPRAVNOG ODGOVORA:
 ⚠️ KRITIČNO - NE IZMIŠLJAJ ŠIFRE! ⚠️
 - Koristi ISKLJUČIVO šifre navedene gore ili iz KPD 2025 klasifikacije
 - Format šifre: XX.XX.XX (npr. 62.20.30, 95.10.01)
-- Format reason: "Objašnjenje - ASPEKT: naziv" (ASPEKT ide NA KRAJ!)`;
+- Format reason: "Objašnjenje - ASPEKT: naziv" (ASPEKT ide NA KRAJ!)
+
+🛡️ CONTENT POLICY:
+1. UVIJEK koristi NEUTRALNA, SLUŽBENA objašnjenja
+2. NIKADA ne objašnjavaj u kontekstu ilegalnih aktivnosti
+3. Za osjetljive usluge naglasi LEGALNI kontekst i potrebne dozvole`;
   }
 
   private buildStandardPrompt(query: string): string {
@@ -334,6 +502,15 @@ Za svaku šifru navedi:
 4. Provjeri svaku šifru u priloženom dokumentu prije nego je predložiš
 5. Format reason: "Objašnjenje - ASPEKT: naziv" (ASPEKT ide NA KRAJ!)
 
+🛡️ CONTENT POLICY - OBAVEZNO SLIJEDI:
+1. UVIJEK koristi NEUTRALNA, SLUŽBENA objašnjenja temeljena na KPD opisu
+2. NIKADA ne objašnjavaj šifre u kontekstu ilegalnih aktivnosti
+3. NIKADA ne spominji: darkweb, crno tržište, ilegalna prodaja, zaobilaženje zakona
+4. Za OSJETLJIVE artikle (lijekovi, oružje, kemikalije):
+   - Vrati LEGITIMNE šifre (ljekarne, oružarnice, industrija)
+   - Objašnjenje MORA naglasiti LEGALNI kontekst i potrebne dozvole
+   - Primjer: "Maloprodaja farmaceutskih proizvoda u OVLAŠTENIM ljekarnama (zahtijeva dozvolu) - ASPEKT: Trgovina na malo"
+
 Odgovori ISKLJUČIVO u JSON formatu bez dodatnog teksta:
 {
   "suggestions": [
@@ -342,22 +519,147 @@ Odgovori ISKLJUČIVO u JSON formatu bez dodatnog teksta:
 }`;
   }
 
+  /**
+   * Query Gemini API s retry logikom i queueing-om
+   * Premium error handling - garantira minimalnu grešku korisnika
+   */
   private async queryGemini(prompt: string): Promise<string> {
     if (!this.client || !this.ragStoreId) {
       throw new Error('Gemini client ili RAG store nije inicijaliziran');
     }
 
-    this.logger.debug(`Querying Gemini with File Search grounding: ${this.ragStoreId}`);
+    // Dodaj u queue i čekaj rezultat
+    return this.enqueueRequest(prompt);
+  }
 
-    // Bez timeout wrappera - Gemini API ima vlastiti timeout
-    const response = await this.client.models.generateContent({
+  /**
+   * Dodaj zahtjev u queue
+   */
+  private enqueueRequest(prompt: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      this.requestQueue.push({
+        prompt,
+        resolve,
+        reject,
+        retryCount: 0,
+        addedAt: Date.now(),
+      });
+
+      this.stats.totalRequests++;
+      this.logger.debug(`Request queued. Queue size: ${this.requestQueue.length}, Active: ${this.activeRequests}`);
+
+      // Pokreni queue processor ako nije aktivan
+      this.processQueue();
+    });
+  }
+
+  /**
+   * Procesiraj queue - kontrolirano slanje zahtjeva
+   */
+  private async processQueue(): Promise<void> {
+    if (this.isProcessingQueue) return;
+    this.isProcessingQueue = true;
+
+    while (this.requestQueue.length > 0) {
+      // Čekaj ako je previše aktivnih zahtjeva
+      if (this.activeRequests >= this.maxConcurrentRequests) {
+        await this.sleep(100);
+        continue;
+      }
+
+      // Rate limiting - osiguraj minimalni interval
+      const timeSinceLastRequest = Date.now() - this.lastRequestTime;
+      if (timeSinceLastRequest < this.minRequestIntervalMs) {
+        await this.sleep(this.minRequestIntervalMs - timeSinceLastRequest);
+      }
+
+      const request = this.requestQueue.shift();
+      if (!request) continue;
+
+      // Provjeri timeout (30 sekundi u queue = odbaci)
+      if (Date.now() - request.addedAt > 30000) {
+        this.logger.warn('Request timeout in queue - odbačen');
+        request.reject(new Error('Request timeout - queue preopterećen'));
+        this.stats.failedRequests++;
+        continue;
+      }
+
+      this.activeRequests++;
+      this.lastRequestTime = Date.now();
+
+      // Izvedi zahtjev s retry logikom (bez await da omogućimo paralelizam)
+      this.executeWithRetry(request)
+        .finally(() => {
+          this.activeRequests--;
+        });
+    }
+
+    this.isProcessingQueue = false;
+  }
+
+  /**
+   * Izvedi zahtjev s exponential backoff retry logikom
+   */
+  private async executeWithRetry(request: QueuedRequest): Promise<void> {
+    const startTime = Date.now();
+
+    for (let attempt = 0; attempt <= this.retryConfig.maxRetries; attempt++) {
+      try {
+        const response = await this.executeGeminiRequest(request.prompt);
+
+        // Uspješno!
+        const latency = Date.now() - startTime;
+        this.updateAverageLatency(latency);
+        this.stats.successfulRequests++;
+
+        if (attempt > 0) {
+          this.logger.log(`Request succeeded after ${attempt} retries (${latency}ms)`);
+        }
+
+        request.resolve(response);
+        return;
+
+      } catch (error: any) {
+        const isRateLimitError = this.isRateLimitError(error);
+        const isRetryableError = this.isRetryableError(error);
+
+        if (isRateLimitError) {
+          this.stats.rateLimitHits++;
+          this.logger.warn(`Rate limit hit (429). Attempt ${attempt + 1}/${this.retryConfig.maxRetries + 1}`);
+        }
+
+        // Ako nije retryable ili smo iscrpili pokušaje - odustani
+        if (!isRetryableError || attempt === this.retryConfig.maxRetries) {
+          this.stats.failedRequests++;
+          this.logger.error(`Request failed after ${attempt + 1} attempts: ${error.message}`);
+          request.reject(this.createUserFriendlyError(error));
+          return;
+        }
+
+        // Izračunaj delay za retry (exponential backoff + jitter)
+        const delay = this.calculateRetryDelay(attempt, isRateLimitError);
+        this.stats.retriedRequests++;
+
+        this.logger.debug(`Retrying in ${delay}ms (attempt ${attempt + 1}/${this.retryConfig.maxRetries + 1})`);
+        await this.sleep(delay);
+      }
+    }
+  }
+
+  /**
+   * Direktno izvedi Gemini zahtjev (bez retry logike)
+   */
+  private async executeGeminiRequest(prompt: string): Promise<string> {
+    this.logger.debug(`Executing Gemini request with File Search grounding: ${this.ragStoreId}`);
+
+    const response = await this.client!.models.generateContent({
       model: this.geminiModel,
       contents: prompt,
       config: {
         tools: [
           {
             fileSearch: {
-              fileSearchStoreNames: [this.ragStoreId],
+              fileSearchStoreNames: [this.ragStoreId!],
             },
           },
         ],
@@ -365,6 +667,138 @@ Odgovori ISKLJUČIVO u JSON formatu bez dodatnog teksta:
     });
 
     return response.text || '';
+  }
+
+  /**
+   * Provjeri je li greška rate limit (429)
+   */
+  private isRateLimitError(error: any): boolean {
+    if (!error) return false;
+
+    // HTTP status 429
+    if (error.status === 429 || error.statusCode === 429) return true;
+
+    // Google API specifične poruke
+    const message = String(error.message || '').toLowerCase();
+    if (message.includes('rate limit') || message.includes('quota exceeded') ||
+        message.includes('resource exhausted') || message.includes('429')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Provjeri je li greška retryable
+   */
+  private isRetryableError(error: any): boolean {
+    if (!error) return false;
+
+    // Rate limit je uvijek retryable
+    if (this.isRateLimitError(error)) return true;
+
+    // HTTP status kodovi koji su retryable
+    const retryableStatuses = [429, 500, 502, 503, 504];
+    if (retryableStatuses.includes(error.status) || retryableStatuses.includes(error.statusCode)) {
+      return true;
+    }
+
+    // Network greške
+    const message = String(error.message || '').toLowerCase();
+    if (message.includes('network') || message.includes('timeout') ||
+        message.includes('econnreset') || message.includes('socket')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Izračunaj delay za retry s exponential backoff + jitter
+   */
+  private calculateRetryDelay(attempt: number, isRateLimitError: boolean): number {
+    // Za rate limit greške, koristi duži bazni delay
+    const baseDelay = isRateLimitError
+      ? this.retryConfig.baseDelayMs * 2
+      : this.retryConfig.baseDelayMs;
+
+    // Exponential backoff: baseDelay * 2^attempt
+    let delay = baseDelay * Math.pow(2, attempt);
+
+    // Ograniči na max delay
+    delay = Math.min(delay, this.retryConfig.maxDelayMs);
+
+    // Dodaj random jitter za izbjegavanje thundering herd problema
+    const jitter = Math.random() * this.retryConfig.jitterMs * 2 - this.retryConfig.jitterMs;
+    delay += jitter;
+
+    return Math.max(0, Math.round(delay));
+  }
+
+  /**
+   * Stvori user-friendly error poruku
+   */
+  private createUserFriendlyError(error: any): Error {
+    if (this.isRateLimitError(error)) {
+      return new Error('Sustav je trenutno preopterećen. Molimo pokušajte ponovno za nekoliko sekundi.');
+    }
+
+    const message = String(error.message || '').toLowerCase();
+    if (message.includes('timeout')) {
+      return new Error('Zahtjev je trajao predugo. Molimo pokušajte ponovno.');
+    }
+
+    if (message.includes('network') || message.includes('connection')) {
+      return new Error('Problem s mrežnom vezom. Molimo provjerite internet i pokušajte ponovno.');
+    }
+
+    return new Error('Došlo je do greške pri obradi zahtjeva. Molimo pokušajte ponovno.');
+  }
+
+  /**
+   * Ažuriraj prosječnu latenciju (rolling average)
+   */
+  private updateAverageLatency(latencyMs: number): void {
+    const totalSuccessful = this.stats.successfulRequests;
+    if (totalSuccessful === 1) {
+      this.stats.averageLatencyMs = latencyMs;
+    } else {
+      // Rolling average
+      this.stats.averageLatencyMs =
+        (this.stats.averageLatencyMs * (totalSuccessful - 1) + latencyMs) / totalSuccessful;
+    }
+  }
+
+  /**
+   * Helper za sleep
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Dohvati statistike za monitoring/debugging
+   */
+  getStats(): typeof this.stats & { queueSize: number; activeRequests: number } {
+    return {
+      ...this.stats,
+      queueSize: this.requestQueue.length,
+      activeRequests: this.activeRequests,
+    };
+  }
+
+  /**
+   * Reset statistike
+   */
+  resetStats(): void {
+    this.stats = {
+      totalRequests: 0,
+      successfulRequests: 0,
+      failedRequests: 0,
+      retriedRequests: 0,
+      rateLimitHits: 0,
+      averageLatencyMs: 0,
+    };
   }
 
   private parseResponse(responseText: string, queryType: 'validation' | 'multi-service' | 'standard' = 'standard'): RagSuggestion[] {

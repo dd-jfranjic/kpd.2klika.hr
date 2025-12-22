@@ -41,6 +41,7 @@ export class AuthController {
    * Registracija novog korisnika
    * SECURITY: Strogi rate limit - 5 zahtjeva po satu
    * Nakon registracije korisnik mora verificirati email prije logina
+   * GDPR: Sprema registracijske metapodatke i privole
    */
   @Public()
   @Post('register')
@@ -51,10 +52,19 @@ export class AuthController {
     description: 'Korisnik uspješno registriran - potrebna email verifikacija',
     type: RegisterResponseDto,
   })
+  @ApiResponse({ status: 400, description: 'Privole nisu prihvaćene' })
   @ApiResponse({ status: 409, description: 'Email već postoji' })
   @ApiResponse({ status: 429, description: 'Previše zahtjeva - pokušajte kasnije' })
-  async register(@Body() dto: RegisterDto): Promise<RegisterResponseDto> {
-    return this.authService.register(dto);
+  async register(
+    @Body() dto: RegisterDto,
+    @Req() req: Request,
+  ): Promise<RegisterResponseDto> {
+    // GDPR: Prikupi metapodatke za audit trail
+    const metadata = {
+      ipAddress: req.ip || (req.headers['x-real-ip'] as string) || req.socket?.remoteAddress,
+      userAgent: req.headers['user-agent'],
+    };
+    return this.authService.register(dto, metadata);
   }
 
   /**

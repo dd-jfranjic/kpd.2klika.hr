@@ -13,6 +13,7 @@ import { QueriesModule } from './modules/queries/queries.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { EmailModule } from './modules/email/email.module';
+import { GdprModule } from './modules/gdpr/gdpr.module';
 
 /**
  * KPD 2klika API - Fresh Start
@@ -82,6 +83,9 @@ import { EmailModule } from './modules/email/email.module';
 
     // Email service (global)
     EmailModule,
+
+    // GDPR Compliance (PHASE 7)
+    GdprModule,
   ],
   controllers: [],
   providers: [

@@ -8,6 +8,41 @@
 
 ---
 
+## 🗄️ DATABASE SAFETY - KRITIČNO!
+
+**⚠️ OVO PRAVILO IMA NAJVIŠI PRIORITET - ČITAJ SVAKU SESIJU!**
+
+### APSOLUTNO ZABRANJENO:
+- ❌ **NIKADA ne briši podatke** iz baze bez eksplicitne dozvole korisnika
+- ❌ **NIKADA ne pokreći `docker-compose down -v`** (briše volumene s podacima!)
+- ❌ **NIKADA ne pokreći `docker volume rm`** bez prethodne provjere sadržaja
+- ❌ **NIKADA ne pokreći `prisma migrate reset`** u produkciji
+- ❌ **NIKADA ne koristi `--force-reset` flagove** koji mogu obrisati podatke
+
+### PRIJE bilo kakve operacije koja MOŽE utjecati na bazu:
+1. **PROVJERI** postoji li backup (`backups/` folder)
+2. **NAPRAVI BACKUP** ako ne postoji:
+   ```bash
+   docker exec kpd_postgres pg_dump -U kpd_user kpd_db > backups/backup_$(date +%Y%m%d_%H%M%S).sql
+   ```
+3. **PITAJ KORISNIKA** za potvrdu prije destruktivnih operacija
+
+### DESTRUKTIVNE OPERACIJE (zahtijevaju backup + potvrdu):
+- `docker-compose down` (može utjecati na volumene)
+- `docker volume prune/rm`
+- `prisma db push --force-reset`
+- `prisma migrate reset`
+- `DROP TABLE/DATABASE` SQL naredbe
+- Bilo kakva migracija koja briše stupce/tablice
+
+### SIGURNE OPERACIJE (ne zahtijevaju posebnu potvrdu):
+- `docker-compose restart`
+- `prisma db push` (dodaje nove tablice/stupce, NE briše)
+- `prisma generate`
+- SELECT upiti
+
+---
+
 ## PROJEKTNA DOKUMENTACIJA
 
 ### Glavni Dokumenti (OBAVEZNO CITAJ!)
@@ -215,6 +250,130 @@ docker image prune -f && docker builder prune -f
 
 ---
 
+## 🚀 ZERO-DOWNTIME DEPLOYMENT (Blue-Green)
+
+**KRITIČNO**: Slijedi ovu proceduru za SVAKI deployment!
+**Detaljno**: [docs/DEPLOYMENT_PROCEDURE.md](./docs/DEPLOYMENT_PROCEDURE.md)
+
+### Arhitektura
+
+```
+kpd.2klika.hr → Apache → BLUE (active) ili GREEN (standby)
+                              ↓
+                    Shared: PostgreSQL, Redis, PgBouncer
+```
+
+| Environment | Web Port | API Port | Compose File |
+|-------------|----------|----------|--------------|
+| **BLUE** | 13620 | 13621 | `docker/docker-compose.prod.yml` |
+| **GREEN** | 13630 | 13631 | `docker/docker-compose.green.yml` |
+
+### ⚠️ VAŽNO: Apache Routing za Next.js API
+
+**Problem**: Apache routing šalje SVE `/api/` zahtjeve na NestJS backend, ali `/api/kpd/search` je Next.js API ruta koja proxira na backend s extended timeout-om (120s za Gemini RAG).
+
+**Rješenje**: `switch.sh` automatski generira Apache config s izuzetkom:
+```apache
+# Next.js API routes (must be BEFORE NestJS catch-all!)
+ProxyPass /api/kpd/ http://127.0.0.1:$web_port/api/kpd/
+ProxyPassReverse /api/kpd/ http://127.0.0.1:$web_port/api/kpd/
+
+# API routes go to NestJS backend
+ProxyPass /api/ http://127.0.0.1:$api_port/api/
+ProxyPassReverse /api/ http://127.0.0.1:$api_port/api/
+```
+
+**Ako AI upiti vrate 404**: Provjeri `/var/www/vhosts/system/kpd.2klika.hr/conf/vhost_ssl.conf` - mora imati `/api/kpd/` izuzetak PRIJE općeg `/api/` pravila!
+
+### WORKFLOW ZA BUG FIX / FEATURE
+
+**Kad korisnik kaže "Popravi X" ili "Dodaj Y", CLAUDE MORA:**
+
+#### 1. ANALIZA (prije kodiranja!)
+
+```
+□ Je li potrebna promjena baze (Prisma schema)?
+  → DA: Migracija MORA biti backward-compatible!
+        - Nova kolona? MORA biti nullable (?) ili @default()
+        - Brisanje? NIKAD dok stari kod radi!
+  → NE: Samo promjena koda - jednostavnije
+
+□ Koje datoteke treba mijenjati?
+□ Treba li novi API endpoint?
+□ Treba li UI promjena?
+```
+
+#### 2. IMPLEMENTACIJA
+
+```bash
+cd /var/www/vhosts/kpd.2klika.hr/httpdocs
+
+# Ako treba migracija:
+cd packages/database
+npx prisma migrate deploy
+cd ../..
+```
+
+#### 3. DEPLOY (jedna komanda!)
+
+```bash
+./deploy/deploy.sh
+```
+
+Skripta automatski:
+- ✅ Detektira aktivan environment (BLUE/GREEN)
+- ✅ Builda STANDBY dok ACTIVE još radi
+- ✅ Čeka health check
+- ✅ Docker cleanup (KRITIČNO!)
+- ✅ Fix permissions
+- ✅ Pita za switch
+
+#### 4. POST-DEPLOY CHECKLIST
+
+```bash
+# Provjeri zdravlje
+curl -s https://kpd.2klika.hr/api/health | jq
+
+# Provjeri logove (greške?)
+docker logs kpd-web --tail 50
+docker logs kpd-api --tail 50
+
+# Disk space (MORA biti <85%)
+df -h /
+```
+
+### ROLLBACK (1 sekunda!)
+
+```bash
+./deploy/rollback.sh
+```
+
+### Deploy Komande
+
+| Akcija | Komanda |
+|--------|---------|
+| **Deploy** (automatski) | `./deploy/deploy.sh` |
+| **Status** | `./deploy/switch.sh status` |
+| **Rollback** | `./deploy/rollback.sh` |
+| Switch BLUE | `./deploy/switch.sh blue` |
+| Switch GREEN | `./deploy/switch.sh green` |
+
+### ⚠️ OBAVEZNO NAKON SVAKOG DEPLOYA:
+
+```bash
+# 1. Docker cleanup
+docker image prune -f && docker builder prune -f
+
+# 2. Provjeri disk
+df -h /
+
+# 3. Fix permissions (ako treba)
+chown -R kpd.2klika.hr_cjfmg3wnf4u:psacln /var/www/vhosts/kpd.2klika.hr/httpdocs/
+chmod +x deploy/*.sh
+```
+
+---
+
 ## MCP TOOLS
 
 ### Stripe MCP (`mcp__stripe-kpd__*`)
@@ -334,6 +493,6 @@ python3 gemini_rag.py list-stores
 
 ---
 
-**Last Updated**: 2025-12-15
-**Version**: 2.1 (Sve faze završene osim Polish ~80%)
+**Last Updated**: 2025-12-17
+**Version**: 2.3 (Apache routing za Next.js API dokumentirano)
 **Maintained by**: Claude Code

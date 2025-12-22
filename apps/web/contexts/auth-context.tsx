@@ -21,12 +21,18 @@ interface ImpersonationState {
   impersonatedAt: string | null;
 }
 
+interface GdprConsents {
+  termsOfService: boolean;
+  privacyPolicy: boolean;
+  marketingEmails?: boolean;
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, firstName?: string, lastName?: string) => Promise<{ requiresVerification: boolean }>;
+  register: (email: string, password: string, firstName?: string, lastName?: string, consents?: GdprConsents) => Promise<{ requiresVerification: boolean }>;
   logout: () => void;
   refreshUser: () => Promise<void>;
   isAdmin: boolean;
@@ -47,18 +53,35 @@ const getStoredToken = (): string | null => {
   return localStorage.getItem('kpd_auth_token');
 };
 
-const storeToken = (token: string) => {
+const getStoredRefreshToken = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('kpd_refresh_token');
+};
+
+const storeTokens = (accessToken: string, refreshToken?: string) => {
   if (typeof window === 'undefined') return;
-  localStorage.setItem('kpd_auth_token', token);
-  // Also set as cookie for middleware
-  document.cookie = `kpd_auth_token=${token}; path=/; max-age=${24 * 60 * 60}; SameSite=Lax`;
+  localStorage.setItem('kpd_auth_token', accessToken);
+  if (refreshToken) {
+    localStorage.setItem('kpd_refresh_token', refreshToken);
+  }
+  // Also set access token as cookie for middleware
+  document.cookie = `kpd_auth_token=${accessToken}; path=/; max-age=${24 * 60 * 60}; SameSite=Lax`;
+};
+
+// Legacy support - calls storeTokens
+const storeToken = (token: string) => {
+  storeTokens(token);
 };
 
 const clearToken = () => {
   if (typeof window === 'undefined') return;
   localStorage.removeItem('kpd_auth_token');
+  localStorage.removeItem('kpd_refresh_token');
   document.cookie = 'kpd_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 };
+
+// Token refresh interval (12 minutes - token expires in 15)
+const TOKEN_REFRESH_INTERVAL = 12 * 60 * 1000;
 
 // Impersonation storage helpers
 const IMPERSONATION_KEY = 'kpd_impersonation';
@@ -143,8 +166,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           avatarUrl: data.avatarUrl || undefined,
           emailVerified: data.emailVerified,
         });
+      } else if (response.status === 401) {
+        // Access token expired - try to refresh
+        const refreshToken = getStoredRefreshToken();
+        if (refreshToken) {
+          try {
+            const refreshResponse = await fetch(`${API_BASE}/auth/refresh`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ refreshToken }),
+            });
+
+            if (refreshResponse.ok) {
+              const refreshData = await refreshResponse.json();
+              if (refreshData.accessToken) {
+                storeTokens(refreshData.accessToken, refreshData.refreshToken);
+                setToken(refreshData.accessToken);
+
+                // Retry getting user profile with new token
+                const retryResponse = await fetch(`${API_BASE}/auth/me`, {
+                  headers: {
+                    'Authorization': `Bearer ${refreshData.accessToken}`,
+                    'Content-Type': 'application/json',
+                  },
+                  credentials: 'include',
+                });
+
+                if (retryResponse.ok) {
+                  const userData = await retryResponse.json();
+                  setUser({
+                    id: userData.id,
+                    email: userData.email,
+                    firstName: userData.firstName || undefined,
+                    lastName: userData.lastName || undefined,
+                    role: userData.role,
+                    organizationId: userData.memberships?.[0]?.organization?.id,
+                    avatarUrl: userData.avatarUrl || undefined,
+                    emailVerified: userData.emailVerified,
+                  });
+                  return;
+                }
+              }
+            }
+          } catch (refreshError) {
+            console.error('Token refresh during checkAuth failed:', refreshError);
+          }
+        }
+
+        // Refresh failed or no refresh token - clear everything
+        clearToken();
+        setUser(null);
+        setToken(null);
       } else {
-        // Token invalid
+        // Other error - clear tokens
         clearToken();
         setUser(null);
         setToken(null);
@@ -159,9 +234,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Function to refresh access token using refresh token
+  const refreshAccessToken = useCallback(async (): Promise<boolean> => {
+    const refreshToken = getStoredRefreshToken();
+    if (!refreshToken) {
+      return false;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.accessToken) {
+          storeTokens(data.accessToken, data.refreshToken);
+          setToken(data.accessToken);
+          return true;
+        }
+      }
+
+      // Refresh failed - clear tokens and logout
+      clearToken();
+      setUser(null);
+      setToken(null);
+      return false;
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+      return false;
+    }
+  }, []);
+
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
+
+  // Set up automatic token refresh interval
+  useEffect(() => {
+    if (!token || !user) return;
+
+    // Refresh token periodically (every 12 minutes)
+    const intervalId = setInterval(async () => {
+      const success = await refreshAccessToken();
+      if (!success && user) {
+        // Refresh failed - user will be logged out automatically
+        console.log('Session expired, logging out...');
+      }
+    }, TOKEN_REFRESH_INTERVAL);
+
+    return () => clearInterval(intervalId);
+  }, [token, user, refreshAccessToken]);
 
   // Redirect based on role (but NOT when impersonating)
   useEffect(() => {
@@ -191,7 +317,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const data = await response.json();
 
     if (data.accessToken) {
-      storeToken(data.accessToken);
+      // Store both access token and refresh token
+      storeTokens(data.accessToken, data.refreshToken);
       setToken(data.accessToken);
     }
 
@@ -216,12 +343,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const register = async (email: string, password: string, firstName?: string, lastName?: string) => {
+  const register = async (email: string, password: string, firstName?: string, lastName?: string, consents?: GdprConsents) => {
     const response = await fetch(`${API_BASE}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ email, password, firstName, lastName }),
+      body: JSON.stringify({
+        email,
+        password,
+        firstName,
+        lastName,
+        // GDPR consents - backend requires these for compliance
+        termsOfService: consents?.termsOfService ?? false,
+        privacyPolicy: consents?.privacyPolicy ?? false,
+        marketingEmails: consents?.marketingEmails,
+      }),
     });
 
     if (!response.ok) {
@@ -238,7 +374,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // If auto-login after registration
     if (data.accessToken) {
-      storeToken(data.accessToken);
+      // Store both access token and refresh token
+      storeTokens(data.accessToken, data.refreshToken);
       setToken(data.accessToken);
       // Map backend response to frontend User interface
       setUser({
@@ -343,6 +480,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     try {
       const currentToken = getStoredToken();
+      const refreshToken = getStoredRefreshToken();
       if (currentToken) {
         await fetch(`${API_BASE}/auth/logout`, {
           method: 'POST',
@@ -351,6 +489,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             'Content-Type': 'application/json',
           },
           credentials: 'include',
+          body: JSON.stringify({ refreshToken }),
         });
       }
     } catch (error) {

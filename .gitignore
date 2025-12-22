@@ -54,3 +54,7 @@ prisma/generated/
 *.pem
 *.key
 credentials.json
+
+# Backups
+backups/
+backup-db.sh

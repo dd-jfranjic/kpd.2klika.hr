@@ -78,13 +78,13 @@ export class EmailService {
         </p>
         <div style="text-align: center; margin: 30px 0;">
           <a href="${verifyUrl}"
-             style="display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+             style="display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, #6CAF7B 0%, #4e8a5e 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
             Potvrdi email adresu
           </a>
         </div>
         <p style="color: #888; font-size: 14px; margin: 20px 0 0;">
           Ili kopirajte ovaj link u preglednik:<br>
-          <a href="${verifyUrl}" style="color: #667eea; word-break: break-all;">${verifyUrl}</a>
+          <a href="${verifyUrl}" style="color: #6B9B76; word-break: break-all;">${verifyUrl}</a>
         </p>
         <p style="color: #888; font-size: 14px; margin: 20px 0 0;">
           Link vrijedi 24 sata.
@@ -123,13 +123,13 @@ export class EmailService {
         </p>
         <div style="text-align: center; margin: 30px 0;">
           <a href="${resetUrl}"
-             style="display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+             style="display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, #6CAF7B 0%, #4e8a5e 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
             Postavi novu lozinku
           </a>
         </div>
         <p style="color: #888; font-size: 14px; margin: 20px 0 0;">
           Ili kopirajte ovaj link u preglednik:<br>
-          <a href="${resetUrl}" style="color: #667eea; word-break: break-all;">${resetUrl}</a>
+          <a href="${resetUrl}" style="color: #6B9B76; word-break: break-all;">${resetUrl}</a>
         </p>
         <p style="color: #888; font-size: 14px; margin: 20px 0 0;">
           Link vrijedi 1 sat. Ako niste zatražili promjenu lozinke, ignorirajte ovaj email.
@@ -166,7 +166,7 @@ export class EmailService {
         </p>
         <div style="text-align: center; margin: 30px 0;">
           <a href="${inviteUrl}"
-             style="display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+             style="display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, #6CAF7B 0%, #4e8a5e 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
             Prihvati pozivnicu
           </a>
         </div>
@@ -213,7 +213,7 @@ export class EmailService {
         </ul>
         <div style="text-align: center; margin: 30px 0;">
           <a href="${dashboardUrl}"
-             style="display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+             style="display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, #6CAF7B 0%, #4e8a5e 100%); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
             Idi na Dashboard
           </a>
         </div>
@@ -262,7 +262,7 @@ export class EmailService {
 
           <!-- Header -->
           <tr>
-            <td style="padding: 30px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px 12px 0 0; text-align: center;">
+            <td style="padding: 30px 40px; background: linear-gradient(135deg, #6CAF7B 0%, #4e8a5e 100%); border-radius: 12px 12px 0 0; text-align: center;">
               <h1 style="margin: 0; color: white; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">
                 KPD 2klika
               </h1>
@@ -286,10 +286,10 @@ export class EmailService {
                 KPD 2klika - Klasifikacija proizvoda i usluga
               </p>
               <p style="margin: 0; color: #aaa; font-size: 12px;">
-                © ${new Date().getFullYear()} 2klika d.o.o. Sva prava pridržana.
+                © ${new Date().getFullYear()} 2klika obrt. Sva prava pridržana.
               </p>
               <p style="margin: 15px 0 0; color: #aaa; font-size: 12px;">
-                <a href="${this.frontendUrl}" style="color: #667eea; text-decoration: none;">kpd.2klika.hr</a>
+                <a href="${this.frontendUrl}" style="color: #6B9B76; text-decoration: none;">kpd.2klika.hr</a>
               </p>
             </td>
           </tr>

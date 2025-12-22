@@ -1,0 +1,45 @@
+# AI KPD Klasifikator
+> AI klasifikacija proizvoda i usluga prema KPD standardu za Fiskalizaciju 2.0
+
+## O usluzi
+
+AI KPD Klasifikator je web aplikacija koja koristi umjetnu inteligenciju za klasifikaciju proizvoda i usluga prema Klasifikaciji proizvoda po djelatnostima (KPD). Od 1. siječnja 2026. KPD šifre postaju obvezne na svim eRačunima u Hrvatskoj.
+
+## Ključne značajke
+
+- AI klasifikacija proizvoda i usluga na hrvatskom jeziku
+- Baza od 5.726 KPD šifri
+- Prikazana razina pouzdanosti za svaku klasifikaciju
+- Povijest klasifikacija
+- Izvoz podataka u CSV format
+- Timski pristup (ovisno o planu)
+
+## Kako radi
+
+1. Korisnik opisuje proizvod ili uslugu na hrvatskom jeziku
+2. AI analizira opis i uspoređuje ga s bazom KPD šifri
+3. Sustav vraća najprikladnije KPD klasifikacije s razinom pouzdanosti
+4. Korisnik odabire odgovarajuću šifru za svoj proizvod/uslugu
+
+## Cjenik
+
+- **KPD Starter** (Besplatno): 3 AI upita mjesečno, 1 korisnik
+- **KPD Plus** (6,99 EUR/mj): 10 AI upita mjesečno, do 2 člana tima
+- **KPD Pro** (11,99 EUR/mj): 20 AI upita mjesečno, do 5 članova tima, CSV izvoz
+- **KPD Business** (30,99 EUR/mj): 50 AI upita mjesečno, do 10 članova tima
+- **KPD Enterprise** (199 EUR/mj): 2500 AI upita mjesečno, neograničen broj članova
+
+## Kontakt
+
+- Web: https://kpd.2klika.hr
+- Email: kpd@2klika.hr
+- Pružatelj: 2 KLIKA obrt, Kašinski odvojak 20a, 10360 Sesvete, Hrvatska
+
+## Pravne informacije
+
+- Uvjeti korištenja: https://kpd.2klika.hr/terms
+- Politika privatnosti: https://kpd.2klika.hr/privacy
+
+## Napomena
+
+AI klasifikacija je pomoćni alat. Rezultati predstavljaju prijedloge bazirane na umjetnoj inteligenciji i ne predstavljaju službeno pravno ili porezno mišljenje. Korisnik je odgovoran za provjeru i odabir konačne KPD šifre.

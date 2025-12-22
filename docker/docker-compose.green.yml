@@ -1,0 +1,85 @@
+# KPD Blue-Green Deployment - GREEN Environment
+#
+# Ova konfiguracija pokreće GREEN verziju aplikacije
+# Koristi ISTU bazu podataka kao BLUE (postgres, pgbouncer, redis)
+# Različiti portovi: web=13630, api=13631
+#
+# Usage:
+#   docker compose -f docker/docker-compose.green.yml up -d --build
+#   docker compose -f docker/docker-compose.green.yml down
+
+name: kpd-green
+
+services:
+  # NestJS API Backend - GREEN
+  api-g:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: kpd-api-g
+    restart: always
+    environment:
+      NODE_ENV: production
+      # Spaja se na ISTU bazu kao BLUE (preko kpd-internal mreže)
+      DATABASE_URL: postgresql://${POSTGRES_USER:-kpd}:${POSTGRES_PASSWORD}@kpd-postgres:5432/${POSTGRES_DB:-kpd}
+      REDIS_URL: redis://kpd-redis:6379
+      PORT: 3000
+    env_file:
+      - ../.env
+    ports:
+      - "13631:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - kpd-internal
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  # Next.js Web Frontend - GREEN
+  web-g:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api/v1}
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}
+        NEXT_PUBLIC_ADMIN_EMAILS: ${NEXT_PUBLIC_ADMIN_EMAILS}
+    container_name: kpd-web-g
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # GREEN API interno
+      INTERNAL_API_URL: http://kpd-api-g:3000
+    env_file:
+      - ../.env
+    ports:
+      - "13630:3000"
+    depends_on:
+      api-g:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - kpd-internal
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+networks:
+  kpd-internal:
+    name: kpd-internal
+    external: true
