@@ -18,15 +18,23 @@ export function LoginPopup() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // Fetch login popups on mount and poll every 30 seconds for real-time updates
   useEffect(() => {
-    if (token && user) {
-      fetchLoginPopups();
-    }
+    if (!token || !user) return;
+
+    fetchLoginPopups(true); // Initial fetch with loading state
+
+    // Poll every 30 seconds for new popups (so admin-sent popups appear quickly)
+    const interval = setInterval(() => fetchLoginPopups(false), 30000);
+    return () => clearInterval(interval);
   }, [token, user]);
 
-  const fetchLoginPopups = async () => {
+  const fetchLoginPopups = async (isInitial = false) => {
     if (!token) return;
-    setLoading(true);
+
+    // Only show loading on initial fetch, not during polling
+    if (isInitial) setLoading(true);
+
     try {
       const res = await fetch('/api/v1/notifications/login-popups', {
         headers: { Authorization: `Bearer ${token}` },
@@ -34,12 +42,22 @@ export function LoginPopup() {
       });
       if (res.ok) {
         const data = await res.json();
-        setPopups(data.data || []);
+        const newPopups = data.data || [];
+
+        // Only update if we have new popups AND no popup is currently displayed
+        // This prevents interrupting the user while viewing a popup
+        setPopups((currentPopups) => {
+          if (currentPopups.length === 0 && newPopups.length > 0) {
+            return newPopups;
+          }
+          return currentPopups;
+        });
       }
     } catch (error) {
       console.error('Error fetching login popups:', error);
     }
-    setLoading(false);
+
+    if (isInitial) setLoading(false);
   };
 
   const markAsShown = async (notificationId: string) => {
