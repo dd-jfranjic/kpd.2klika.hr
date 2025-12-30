@@ -160,9 +160,9 @@ export function NotificationBell() {
         )}
       </button>
 
-      {/* Dropdown - positioned to the left so it doesn't get cut off in sidebar */}
+      {/* Dropdown - positioned with transform to avoid cutoff, high z-index */}
       {isOpen && (
-        <div className="absolute left-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border z-50 overflow-hidden">
+        <div className="absolute left-1/2 -translate-x-1/4 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border z-[9999] overflow-hidden">
           {/* Header */}
           <div className="px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
             <h3 className="font-semibold text-gray-900">Obavijesti</h3>
