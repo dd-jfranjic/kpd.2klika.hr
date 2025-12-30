@@ -25,12 +25,12 @@ export function NotificationBell() {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Fetch unread count on mount and periodically
+  // Fetch unread count on mount and periodically (every 15 seconds for real-time feel)
   useEffect(() => {
     if (!token) return;
 
     fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 60000); // Every minute
+    const interval = setInterval(fetchUnreadCount, 15000); // Every 15 seconds
     return () => clearInterval(interval);
   }, [token]);
 
@@ -171,13 +171,33 @@ export function NotificationBell() {
         className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
         title="Obavijesti"
       >
-        <Bell className="w-5 h-5" />
+        <Bell className={`w-5 h-5 ${unreadCount > 0 ? 'animate-bell-ring text-primary-600' : ''}`} />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+          <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center animate-pulse">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
+
+      {/* Bell ring animation styles */}
+      <style jsx>{`
+        @keyframes bell-ring {
+          0%, 100% { transform: rotate(0deg); }
+          10% { transform: rotate(14deg); }
+          20% { transform: rotate(-14deg); }
+          30% { transform: rotate(10deg); }
+          40% { transform: rotate(-10deg); }
+          50% { transform: rotate(6deg); }
+          60% { transform: rotate(-6deg); }
+          70% { transform: rotate(2deg); }
+          80% { transform: rotate(-2deg); }
+          90% { transform: rotate(0deg); }
+        }
+        :global(.animate-bell-ring) {
+          animation: bell-ring 2s ease-in-out infinite;
+          transform-origin: top center;
+        }
+      `}</style>
 
       {/* Dropdown - fixed position to escape sidebar overflow */}
       {isOpen && (
