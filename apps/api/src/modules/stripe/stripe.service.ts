@@ -763,6 +763,9 @@ export class StripeService {
 
   /**
    * Handler: Subscription Created
+   *
+   * VAŽNO: Pri upgrade-u, stari monthlyQueryLimit se prenosi u bonusQueryQuota!
+   * Primjer: FREE (3) → PRO (20) = ukupno 23 upita
    */
   private async handleSubscriptionCreated(subscription: Stripe.Subscription): Promise<void> {
     let organizationId = subscription.metadata.organizationId;
@@ -786,6 +789,27 @@ export class StripeService {
       where: { plan },
     });
 
+    // Dohvati postojeću pretplatu za prijenos starih upita
+    const existingSubscription = await this.prisma.subscription.findUnique({
+      where: { organizationId },
+    });
+
+    // Izračunaj novi bonusQueryQuota:
+    // - Postojeći bonus ostaje
+    // - Stari monthlyQueryLimit se DODAJE (evidencija ukupno dobivenih upita)
+    // - UKUPNO = fiksno (sve što je korisnik ikad dobio)
+    // - PREOSTALO = dinamički (ukupno - potrošeno)
+    const existingBonus = existingSubscription?.bonusQueryQuota ?? 0;
+    const oldMonthlyLimit = existingSubscription?.monthlyQueryLimit ?? 0;
+    const newMonthlyLimit = planConfig?.monthlyQueryLimit ?? planConfig?.dailyQueryLimit ?? 0;
+
+    // Prenesi CIJELI stari limit kao bonus (evidencija)
+    let newBonusQuota = existingBonus;
+    if (existingSubscription && oldMonthlyLimit > 0) {
+      newBonusQuota = existingBonus + oldMonthlyLimit;
+      this.logger.log(`Prijenos upita pri upgrade-u: stari limit ${oldMonthlyLimit} + postojeći bonus ${existingBonus} = novi bonus ${newBonusQuota}`);
+    }
+
     await this.prisma.subscription.upsert({
       where: { organizationId },
       create: {
@@ -798,7 +822,8 @@ export class StripeService {
         currentPeriodEnd: new Date(subscription.current_period_end * 1000),
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
         dailyQueryLimit: planConfig?.dailyQueryLimit ?? 0,
-        monthlyQueryLimit: planConfig?.monthlyQueryLimit ?? planConfig?.dailyQueryLimit ?? 0,
+        monthlyQueryLimit: newMonthlyLimit,
+        bonusQueryQuota: newBonusQuota,
       },
       update: {
         stripeSubscriptionId: subscription.id,
@@ -809,11 +834,12 @@ export class StripeService {
         currentPeriodEnd: new Date(subscription.current_period_end * 1000),
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
         dailyQueryLimit: planConfig?.dailyQueryLimit ?? 0,
-        monthlyQueryLimit: planConfig?.monthlyQueryLimit ?? planConfig?.dailyQueryLimit ?? 0,
+        monthlyQueryLimit: newMonthlyLimit,
+        bonusQueryQuota: newBonusQuota,
       },
     });
 
-    this.logger.log(`Kreirana/ažurirana pretplata za organizaciju ${organizationId}: ${plan}`);
+    this.logger.log(`Kreirana/ažurirana pretplata za organizaciju ${organizationId}: ${plan} (limit: ${newMonthlyLimit}, bonus: ${newBonusQuota}, ukupno: ${newMonthlyLimit + newBonusQuota})`);
 
     // TODO: Pošalji welcome email
   }
@@ -931,11 +957,16 @@ export class StripeService {
 
   /**
    * Handler: Payment Succeeded
+   *
+   * ROLLOVER LOGIKA:
+   * Kad naplata prođe, neiskorišteni upiti se prenose u sljedeći mjesec.
+   * bonusQueryQuota = preostalo iz prošlog mjeseca
    */
   private async handlePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
     const customerId = invoice.customer as string;
     const org = await this.prisma.organization.findFirst({
       where: { stripeCustomerId: customerId },
+      include: { subscription: true },
     });
 
     if (!org) {
@@ -943,13 +974,47 @@ export class StripeService {
       return;
     }
 
-    // Osiguraj da je status ACTIVE
-    await this.prisma.subscription.updateMany({
-      where: { organizationId: org.id },
-      data: { status: 'ACTIVE' },
+    const subscription = org.subscription;
+    if (!subscription) {
+      this.logger.warn(`Organizacija ${org.id} nema subscription`);
+      return;
+    }
+
+    // Izračunaj koliko je preostalo (rollover u sljedeći mjesec)
+    const monthlyLimit = subscription.monthlyQueryLimit ?? 0;
+    const bonusQuota = subscription.bonusQueryQuota ?? 0;
+    const totalLimit = monthlyLimit + bonusQuota;
+
+    // Broji potrošene upite ovaj mjesec (samo uspješne)
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    const usedThisMonth = await this.prisma.query.count({
+      where: {
+        organizationId: org.id,
+        createdAt: { gte: monthStart },
+        NOT: { suggestedCodes: { equals: [] } },
+      },
     });
 
-    this.logger.log(`Uspješno plaćanje za organizaciju ${org.id}`);
+    // Preostalo = ukupno - potrošeno (minimum 0)
+    const remaining = Math.max(0, totalLimit - usedThisMonth);
+
+    // ROLLOVER: preostalo postaje novi bonus za sljedeći mjesec
+    await this.prisma.subscription.update({
+      where: { organizationId: org.id },
+      data: {
+        status: 'ACTIVE',
+        bonusQueryQuota: remaining,  // Prenesi neiskorišteno
+      },
+    });
+
+    this.logger.log(
+      `Uspješno plaćanje za organizaciju ${org.id}. ` +
+      `Rollover: ${totalLimit} ukupno - ${usedThisMonth} potrošeno = ${remaining} prenosi se u novi mjesec. ` +
+      `Novi ukupno: ${monthlyLimit} (plan) + ${remaining} (rollover) = ${monthlyLimit + remaining}`
+    );
 
     // TODO: Pošalji potvrdu plaćanja email
   }

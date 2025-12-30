@@ -93,6 +93,13 @@ export default function OrganizationDetailPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Gift modal state
+  const [showGiftModal, setShowGiftModal] = useState(false);
+  const [giftAmount, setGiftAmount] = useState(10);
+  const [giftMessage, setGiftMessage] = useState('');
+  const [giftNotificationType, setGiftNotificationType] = useState<'CLASSIC' | 'LOGIN_POPUP'>('CLASSIC');
+  const [giftLoading, setGiftLoading] = useState(false);
+
   useEffect(() => {
     if (!authLoading && (!user || !isAdmin)) {
       router.push('/dashboard');
@@ -154,6 +161,41 @@ export default function OrganizationDetailPage() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const handleGiftQueries = async () => {
+    if (!token || giftAmount <= 0) return;
+    setGiftLoading(true);
+    try {
+      const res = await fetch(`/api/v1/admin/tenants/${orgId}/gift`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          amount: giftAmount,
+          message: giftMessage || undefined,
+          notificationType: giftNotificationType,
+        }),
+      });
+
+      if (res.ok) {
+        setShowGiftModal(false);
+        setGiftAmount(10);
+        setGiftMessage('');
+        setGiftNotificationType('CLASSIC');
+        fetchOrgDetail();
+      } else {
+        const data = await res.json();
+        alert(data.message || 'Greška pri poklanjanju upita');
+      }
+    } catch (error) {
+      console.error('Error gifting queries:', error);
+      alert('Greška pri poklanjanju upita');
+    }
+    setGiftLoading(false);
   };
 
   const formatDate = (dateStr: string | null) => {
@@ -386,9 +428,12 @@ export default function OrganizationDetailPage() {
                     <RefreshCw className="w-3 h-3" />
                     Promijeni plan
                   </button>
-                  <button className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-green-50 text-green-700 rounded-lg hover:bg-green-100">
+                  <button
+                    onClick={() => setShowGiftModal(true)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-green-50 text-green-700 rounded-lg hover:bg-green-100"
+                  >
                     <Gift className="w-3 h-3" />
-                    Dodaj kredite
+                    Pokloni upite
                   </button>
                 </div>
               </div>
@@ -588,6 +633,110 @@ export default function OrganizationDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Gift Modal */}
+      {showGiftModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                <Gift className="w-6 h-6 text-green-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Pokloni upite</h3>
+                <p className="text-sm text-gray-500">{orgData.name}</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* Amount */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Broj upita
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  value={giftAmount}
+                  onChange={(e) => setGiftAmount(parseInt(e.target.value) || 0)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Upiti se dodaju na postojeći bonus ({orgData.subscription?.monthlyQueryLimit || 0} limit)
+                </p>
+              </div>
+
+              {/* Message */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Poruka (opcionalno)
+                </label>
+                <textarea
+                  value={giftMessage}
+                  onChange={(e) => setGiftMessage(e.target.value)}
+                  placeholder="Hvala na korištenju naše usluge!"
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-none"
+                />
+              </div>
+
+              {/* Notification Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tip obavijesti
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                    <input
+                      type="radio"
+                      name="notificationType"
+                      value="CLASSIC"
+                      checked={giftNotificationType === 'CLASSIC'}
+                      onChange={() => setGiftNotificationType('CLASSIC')}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Klasična obavijest</p>
+                      <p className="text-xs text-gray-500">Prikazuje se u notification centru (zvonce)</p>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                    <input
+                      type="radio"
+                      name="notificationType"
+                      value="LOGIN_POPUP"
+                      checked={giftNotificationType === 'LOGIN_POPUP'}
+                      onChange={() => setGiftNotificationType('LOGIN_POPUP')}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Popup pri loginu</p>
+                      <p className="text-xs text-gray-500">Modal koji se prikazuje jednom pri loginu</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowGiftModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                Odustani
+              </button>
+              <button
+                onClick={handleGiftQueries}
+                disabled={giftLoading || giftAmount <= 0}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {giftLoading ? 'Poklanjanje...' : `Pokloni ${giftAmount} upita`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

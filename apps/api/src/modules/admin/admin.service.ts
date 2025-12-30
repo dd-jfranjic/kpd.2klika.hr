@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
-import { UserRole, PlanType, SubscriptionStatus, ConfigType } from '@prisma/client';
+import { UserRole, PlanType, SubscriptionStatus, ConfigType, Prisma } from '@prisma/client';
 
 @Injectable()
 export class AdminService {
@@ -386,7 +386,9 @@ export class AdminService {
       const orgId = u.memberships[0]?.organization?.id;
       const subscription = u.memberships[0]?.organization?.subscription;
       const plan = subscription?.plan || PlanType.FREE;
-      const monthlyLimit = subscription?.monthlyQueryLimit || planLimitMap[plan] || planLimitMap['FREE'] || 0;
+      const baseLimit = subscription?.monthlyQueryLimit || planLimitMap[plan] || planLimitMap['FREE'] || 0;
+      const bonusQuota = subscription?.bonusQueryQuota ?? 0;
+      const monthlyLimit = baseLimit + bonusQuota; // INCLUDE BONUS QUERIES
       // Usage is per organization, not per user (and only counts queries with results)
       const currentUsage = orgId ? (orgUsageMap[orgId] || 0) : 0;
 
@@ -1203,6 +1205,11 @@ export class AdminService {
     });
     const defaultMonthlyLimit = freePlanConfig?.monthlyQueryLimit ?? freePlanConfig?.dailyQueryLimit ?? 0;
 
+    // Calculate total limit including bonus queries
+    const baseMonthlyLimit = tenant.subscription?.monthlyQueryLimit || planConfig?.monthlyQueryLimit || defaultMonthlyLimit;
+    const bonusQuota = tenant.subscription?.bonusQueryQuota ?? 0;
+    const totalLimit = baseMonthlyLimit + bonusQuota;
+
     return {
       id: tenant.id,
       name: tenant.name,
@@ -1229,7 +1236,7 @@ export class AdminService {
         stripeSubscriptionId: tenant.subscription.stripeSubscriptionId || null,
         currentPeriodStart: tenant.subscription.currentPeriodStart?.toISOString() || null,
         currentPeriodEnd: tenant.subscription.currentPeriodEnd?.toISOString() || null,
-        monthlyQueryLimit: tenant.subscription.monthlyQueryLimit || planConfig?.monthlyQueryLimit || defaultMonthlyLimit,
+        monthlyQueryLimit: totalLimit, // BONUS UKLJUČEN: baseMonthlyLimit + bonusQueryQuota
         totalUsage: usageThisMonth,
         mrr,
       } : {
@@ -1239,7 +1246,7 @@ export class AdminService {
         stripeSubscriptionId: null,
         currentPeriodStart: null,
         currentPeriodEnd: null,
-        monthlyQueryLimit: defaultMonthlyLimit,
+        monthlyQueryLimit: defaultMonthlyLimit, // FREE nema bonus quota
         totalUsage: usageThisMonth,
         mrr: 0,
       },
@@ -1280,6 +1287,94 @@ export class AdminService {
       where: { id: tenantId },
       include: { subscription: true },
     });
+  }
+
+  /**
+   * Pokloni upite organizaciji
+   * Dodaje bonusQueryQuota na postojeće (kumulativno)
+   */
+  async giftQueries(
+    tenantId: string,
+    data: {
+      amount: number;
+      message?: string;
+      notificationType: 'CLASSIC' | 'LOGIN_POPUP';
+    },
+    adminUserId: string,
+  ) {
+    // Provjeri postoji li organizacija
+    const org = await this.prisma.organization.findUnique({
+      where: { id: tenantId },
+      include: {
+        subscription: true,
+        members: {
+          where: { role: 'OWNER' },
+          include: { user: true },
+        },
+      },
+    });
+
+    if (!org) {
+      throw new Error('Organizacija nije pronađena');
+    }
+
+    // Ažuriraj bonusQueryQuota
+    const currentBonus = org.subscription?.bonusQueryQuota ?? 0;
+    const newBonus = currentBonus + data.amount;
+
+    if (org.subscription) {
+      await this.prisma.subscription.update({
+        where: { id: org.subscription.id },
+        data: { bonusQueryQuota: newBonus },
+      });
+    } else {
+      // Ako nema subscription, kreiraj FREE subscription s bonus upitima
+      const freePlan = await this.prisma.planConfig.findUnique({
+        where: { plan: 'FREE' },
+      });
+      await this.prisma.subscription.create({
+        data: {
+          organizationId: tenantId,
+          plan: 'FREE',
+          status: 'ACTIVE',
+          monthlyQueryLimit: freePlan?.monthlyQueryLimit ?? 0,
+          bonusQueryQuota: data.amount,
+        },
+      });
+    }
+
+    // Kreiraj notifikaciju za vlasnika
+    const owner = org.members[0]?.user;
+    if (owner) {
+      const title = `Dobili ste ${data.amount} bonus upita!`;
+      const body = data.message || `Administrator vam je poklonio ${data.amount} dodatnih upita za KPD pretragu.`;
+
+      await this.prisma.notification.create({
+        data: {
+          recipientId: owner.id,
+          kind: data.notificationType,
+          title,
+          body,
+          metadata: {
+            type: 'GIFT_QUERIES',
+            amount: data.amount,
+            previousBonus: currentBonus,
+            newBonus: newBonus,
+          } as Prisma.JsonObject,
+          createdById: adminUserId,
+        },
+      });
+    }
+
+    return {
+      success: true,
+      organizationId: tenantId,
+      organizationName: org.name,
+      amount: data.amount,
+      previousBonus: currentBonus,
+      newBonus: newBonus,
+      notificationSent: !!owner,
+    };
   }
 
   async deleteTenant(tenantId: string) {

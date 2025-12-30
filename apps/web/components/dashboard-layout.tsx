@@ -8,6 +8,8 @@ import { useAuth } from '@/contexts/auth-context';
 import { useIsAdmin } from '@/lib/hooks/use-is-admin';
 import { Menu, X, User, ChevronDown, LogOut, Settings } from 'lucide-react';
 import Link from 'next/link';
+import { NotificationBell } from './notification-bell';
+import { LoginPopup } from './login-popup';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -34,6 +36,8 @@ export function DashboardLayoutClient({ children }: DashboardLayoutProps) {
   if (isAdmin) {
     return (
       <div className="min-h-screen bg-gray-50 flex">
+        {/* Login Popup for notifications */}
+        <LoginPopup />
         {/* Fixed sidebar */}
         <div className="fixed left-0 top-0 bottom-0 w-64 z-40">
           <AdminSidebar />
@@ -43,7 +47,10 @@ export function DashboardLayoutClient({ children }: DashboardLayoutProps) {
         <div className="flex-1 ml-64">
           {/* Top bar for admin */}
           <header className="bg-white border-b h-16 sticky top-0 z-30 shadow-sm">
-            <div className="h-full px-6 flex items-center justify-end">
+            <div className="h-full px-6 flex items-center justify-end gap-4">
+              {/* Notifications */}
+              <NotificationBell />
+
               {/* User dropdown */}
               <div className="relative">
                 <button
@@ -100,6 +107,9 @@ export function DashboardLayoutClient({ children }: DashboardLayoutProps) {
   // REGULAR USER LAYOUT: Sidebar + Content
   return (
     <div className={`kpd-app-layout ${isImpersonating ? 'pt-12' : ''}`}>
+      {/* Login Popup for notifications */}
+      <LoginPopup />
+
       {/* Impersonation Banner */}
       <ImpersonationBanner />
 
@@ -117,7 +127,7 @@ export function DashboardLayoutClient({ children }: DashboardLayoutProps) {
           {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
         <span className="kpd-app-layout__mobile-title">KPD Klasifikator</span>
-        <div className="w-10" /> {/* Spacer for centering */}
+        <NotificationBell />
       </header>
 
       {/* Mobile sidebar overlay */}

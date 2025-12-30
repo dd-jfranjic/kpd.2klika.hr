@@ -17,10 +17,12 @@ import {
   FileText,
   ExternalLink,
   Home,
+  Headphones,
 } from 'lucide-react';
+import { NotificationBell } from './notification-bell';
 
 // App version - update this with each release
-const APP_VERSION = 'v1.3.0';
+const APP_VERSION = 'v1.4.0';
 import { useState, useRef, useEffect } from 'react';
 
 // User menu items - organized by sections
@@ -40,6 +42,12 @@ const userNavItems = [
       { href: '/settings/workspace', label: 'Workspace', icon: Building2 },
       { href: '/settings/members', label: 'Članovi tima', icon: Users },
       { href: '/settings/billing', label: 'Pretplata', icon: CreditCard },
+    ]
+  },
+  {
+    section: 'Pomoć',
+    items: [
+      { href: '/support', label: 'Podrška', icon: Headphones },
     ]
   }
 ];
@@ -68,14 +76,19 @@ export function UserSidebar() {
     <aside className="kpd-user-sidebar">
       {/* Logo */}
       <div className="kpd-user-sidebar__header">
-        <Link href="/classify" className="kpd-user-sidebar__logo">
-          <div className="kpd-user-sidebar__logo-brand">
-            <span className="kpd-user-sidebar__logo-title">AI KPD</span>
-            <span className="kpd-user-sidebar__logo-subtitle">Klasifikator</span>
-            <span className="kpd-user-sidebar__logo-underline"></span>
+        <div className="flex items-center justify-between w-full">
+          <Link href="/classify" className="kpd-user-sidebar__logo">
+            <div className="kpd-user-sidebar__logo-brand">
+              <span className="kpd-user-sidebar__logo-title">AI KPD</span>
+              <span className="kpd-user-sidebar__logo-subtitle">Klasifikator</span>
+              <span className="kpd-user-sidebar__logo-underline"></span>
+            </div>
+            <span className="kpd-user-sidebar__logo-by">by 2klika</span>
+          </Link>
+          <div className="hidden md:block">
+            <NotificationBell />
           </div>
-          <span className="kpd-user-sidebar__logo-by">by 2klika</span>
-        </Link>
+        </div>
       </div>
 
       {/* Navigation */}

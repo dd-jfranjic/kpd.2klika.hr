@@ -240,6 +240,8 @@ export class KpdSuggestionService {
    * - currentPeriodStart pretplate (kada je korisnik upgrade-ao)
    *
    * Time se osigurava da se usage resetira pri upgrade-u!
+   *
+   * BONUS UPITI: bonusQueryQuota se DODAJE na monthlyQueryLimit (npr. FREE 3 + BONUS 10 = 13 ukupno)
    */
   private async checkUsageLimit(organizationId: string): Promise<UsageInfo> {
     // Dohvati organizaciju sa subscription
@@ -263,14 +265,16 @@ export class KpdSuggestionService {
       monthlyLimit = freePlan?.monthlyQueryLimit ?? freePlan?.dailyQueryLimit ?? 0;
     }
 
+    // DODAJ BONUS UPITE (kupljeni ili poklonni upiti)
+    const bonusQuota = org.subscription?.bonusQueryQuota ?? 0;
+    const totalLimit = monthlyLimit + bonusQuota;
+
     // Odredi početak perioda za brojanje upita
+    // UVIJEK broji od početka kalendaskog mjeseca - subscription reset se NE koristi
+    // jer bonusQueryQuota uključuje prenesene upite iz prethodnog plana
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    // Koristi kasniji datum - ili početak mjeseca ili početak pretplate
-    // Ovo osigurava da se usage resetira kada korisnik upgrade-a plan!
-    const subscriptionStart = org.subscription?.currentPeriodStart ?? monthStart;
-    const countFromDate = subscriptionStart > monthStart ? subscriptionStart : monthStart;
+    const countFromDate = monthStart;
 
     // Broji SAMO upite koji su imali rezultate (suggestedCodes nije prazan)
     // Upiti bez rezultata ne troše limit korisnika
@@ -284,9 +288,9 @@ export class KpdSuggestionService {
       },
     });
 
-    const remainingQueries = Math.max(0, monthlyLimit - usedThisMonth);
+    const remainingQueries = Math.max(0, totalLimit - usedThisMonth);
 
-    return { remainingQueries, monthlyLimit, usedThisMonth };
+    return { remainingQueries, monthlyLimit: totalLimit, usedThisMonth };
   }
 
   /**
@@ -416,10 +420,10 @@ export class KpdSuggestionService {
     }
 
     // Odredi početak perioda za brojanje (ista logika kao checkUsageLimit)
+    // UVIJEK broji od početka kalendaskog mjeseca
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const subscriptionStart = org.subscription?.currentPeriodStart ?? monthStart;
-    const countFromDate = subscriptionStart > monthStart ? subscriptionStart : monthStart;
+    const countFromDate = monthStart;
 
     const usageInfo = await this.checkUsageLimit(organizationId);
 

@@ -6,6 +6,37 @@ import { FileText, Calendar, Sparkles, Bug, Wrench, Zap } from 'lucide-react';
 // Changelog entries - add new entries at the top
 const changelogEntries = [
   {
+    version: 'v1.4.0',
+    date: '2025-12-30',
+    title: 'Podrška uživo i notifikacije',
+    changes: [
+      {
+        type: 'feature',
+        description: 'Live chat podrška - direktna komunikacija s timom podrške u stilu WhatsApp-a',
+      },
+      {
+        type: 'feature',
+        description: 'Sustav notifikacija - zvonce s prikazom nepročitanih obavijesti',
+      },
+      {
+        type: 'feature',
+        description: 'Login popup notifikacije - važne obavijesti prikazane pri prijavi',
+      },
+      {
+        type: 'feature',
+        description: 'Admin inbox - centralizirano upravljanje svim korisničkim upitima',
+      },
+      {
+        type: 'feature',
+        description: 'Gift upiti - admin može pokloniti bonus upite organizacijama',
+      },
+      {
+        type: 'improvement',
+        description: 'Poboljšana navigacija s novom sekcijom "Pomoć" u korisničkom izborniku',
+      },
+    ],
+  },
+  {
     version: 'v1.3.0',
     date: '2025-12-19',
     title: 'Fleksibilne opcije plaćanja',

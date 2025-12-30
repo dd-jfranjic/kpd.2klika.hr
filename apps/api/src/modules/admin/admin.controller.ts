@@ -380,6 +380,32 @@ export class AdminController {
     return { success: true, data: result };
   }
 
+  @Post('tenants/:tenantId/gift')
+  @ApiOperation({ summary: 'Pokloni upite organizaciji' })
+  @ApiResponse({ status: 200, description: 'Upiti poklonjeni' })
+  @ApiResponse({ status: 404, description: 'Organizacija nije pronađena' })
+  async giftQueries(
+    @Param('tenantId') tenantId: string,
+    @Body() data: { amount: number; message?: string; notificationType: 'CLASSIC' | 'LOGIN_POPUP' },
+    @CurrentUser() user: JwtPayload,
+    @Req() req: Request,
+  ) {
+    const result = await this.adminService.giftQueries(tenantId, data, user.sub);
+
+    // Audit log
+    await this.adminService.createAuditLog({
+      userId: user.sub,
+      action: 'GIFT_QUERIES',
+      entityType: 'Organization',
+      entityId: tenantId,
+      newValue: { amount: data.amount, message: data.message, notificationType: data.notificationType },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+
+    return { success: true, data: result };
+  }
+
   // =====================================
   // BILLING
   // =====================================

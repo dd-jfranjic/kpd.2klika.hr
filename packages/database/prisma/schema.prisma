@@ -86,6 +86,13 @@ model User {
   processedGdprRequests GdprRequest[] @relation("ProcessedBy")
   cookieConsent       CookieConsent?
 
+  // Notification Relations
+  receivedNotifications Notification[] @relation("ReceivedNotifications")
+  createdNotifications  Notification[] @relation("CreatedNotifications")
+
+  // Support Relations
+  supportThread         SupportThread?
+
   @@index([email])
 }
 
@@ -652,4 +659,109 @@ model CookieConsent {
 
   @@index([visitorId])
   @@index([userId])
+}
+
+// =====================================
+// NOTIFICATION SYSTEM
+// =====================================
+
+model Notification {
+  id              String              @id @default(cuid())
+
+  // Recipient (null = broadcast to all)
+  recipientId     String?
+  recipient       User?               @relation("ReceivedNotifications", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  // Broadcast flag (if true, goes to all users)
+  isBroadcast     Boolean             @default(false)
+
+  // Content
+  kind            NotificationKind    @default(CLASSIC)
+  title           String
+  body            String?
+
+  // Metadata (e.g., gift amount, link, etc.)
+  metadata        Json?
+
+  // Created by admin
+  createdById     String
+  createdBy       User                @relation("CreatedNotifications", fields: [createdById], references: [id])
+
+  // Status tracking
+  readAt          DateTime?           // For CLASSIC - when marked as read
+  shownAt         DateTime?           // For LOGIN_POPUP - when shown to user
+  expiresAt       DateTime?           // Optional expiry
+
+  createdAt       DateTime            @default(now())
+
+  @@index([recipientId])
+  @@index([isBroadcast])
+  @@index([kind])
+  @@index([createdAt])
+}
+
+enum NotificationKind {
+  CLASSIC       // Bell icon, notification center
+  LOGIN_POPUP   // Modal popup on login (show once)
+}
+
+// =====================================
+// SUPPORT CHAT SYSTEM
+// =====================================
+
+model SupportThread {
+  id              String              @id @default(cuid())
+
+  // One thread per user (WhatsApp style)
+  userId          String              @unique
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Status
+  status          ThreadStatus        @default(OPEN)
+
+  // Tracking
+  lastMessageAt   DateTime?
+  unreadByAdmin   Int                 @default(0)
+  unreadByUser    Int                 @default(0)
+
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  messages        SupportMessage[]
+
+  @@index([status])
+  @@index([lastMessageAt])
+}
+
+enum ThreadStatus {
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+model SupportMessage {
+  id              String              @id @default(cuid())
+
+  threadId        String
+  thread          SupportThread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  // Sender
+  senderType      SenderType
+  senderId        String              // User ID (both user and admin are Users)
+
+  // Content
+  body            String
+
+  // Status
+  readAt          DateTime?
+
+  createdAt       DateTime            @default(now())
+
+  @@index([threadId])
+  @@index([createdAt])
+}
+
+enum SenderType {
+  USER
+  ADMIN
 }
