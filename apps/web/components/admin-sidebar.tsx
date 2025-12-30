@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 
 // App version - update this with each release
-const APP_VERSION = 'v1.4.0';
+const APP_VERSION = 'v1.4.1';
 
 // Admin menu items - ADMINISTRACIJA first, then APLIKACIJA (no user account section for admins)
 const adminNavItems = [

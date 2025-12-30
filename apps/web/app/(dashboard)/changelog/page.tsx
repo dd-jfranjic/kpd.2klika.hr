@@ -6,6 +6,25 @@ import { FileText, Calendar, Sparkles, Bug, Wrench, Zap } from 'lucide-react';
 // Changelog entries - add new entries at the top
 const changelogEntries = [
   {
+    version: 'v1.4.1',
+    date: '2025-12-30',
+    title: 'Poboljšanja notifikacija',
+    changes: [
+      {
+        type: 'feature',
+        description: 'Animirano zvonce - zvono se sada animira kada imate nepročitane obavijesti',
+      },
+      {
+        type: 'improvement',
+        description: 'Obavijesti u realnom vremenu - nove poruke i pokloni se prikazuju automatski bez osvježavanja stranice',
+      },
+      {
+        type: 'fix',
+        description: 'Ispravljen prikaz padajućeg izbornika notifikacija na svim veličinama ekrana',
+      },
+    ],
+  },
+  {
     version: 'v1.4.0',
     date: '2025-12-30',
     title: 'Podrška uživo i notifikacije',

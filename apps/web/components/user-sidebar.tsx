@@ -22,7 +22,7 @@ import {
 import { NotificationBell } from './notification-bell';
 
 // App version - update this with each release
-const APP_VERSION = 'v1.4.0';
+const APP_VERSION = 'v1.4.1';
 import { useState, useRef, useEffect } from 'react';
 
 // User menu items - organized by sections
