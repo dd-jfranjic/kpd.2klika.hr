@@ -414,6 +414,9 @@ export class StripeService {
       ],
       success_url: successUrl || `${this.appUrl}/settings/billing?success=true&type=onetime`,
       cancel_url: cancelUrl || `${this.appUrl}/settings/billing?canceled=true`,
+      payment_intent_data: {
+        description: `KPD ${plan} - jednokratna kupnja`,
+      },
       metadata: {
         organizationId,
         purchaseType: 'ONE_TIME_PLAN',
@@ -480,6 +483,9 @@ export class StripeService {
       ],
       success_url: successUrl || `${this.appUrl}/settings/billing?success=true&type=booster`,
       cancel_url: cancelUrl || `${this.appUrl}/settings/billing?canceled=true`,
+      payment_intent_data: {
+        description: 'KPD Query Booster - 10 dodatnih upita',
+      },
       metadata: {
         organizationId,
         purchaseType: 'QUERY_BOOSTER',
@@ -743,19 +749,22 @@ export class StripeService {
       });
       this.logger.log(`Dodano ${queriesIncluded} bonus upita za organizaciju ${organizationId}`);
     } else if (purchaseType === 'ONE_TIME_PLAN' && plan) {
-      // One-time plan purchase - dodaj upite u bonusQueryQuota
+      // One-time plan purchase - ažuriraj plan i limite (NE dodaje u bonus!)
       const planConfig = await this.prisma.planConfig.findUnique({
         where: { plan },
       });
-      const queries = planConfig?.monthlyQueryLimit || queriesIncluded;
 
       await this.prisma.subscription.update({
         where: { organizationId },
         data: {
-          bonusQueryQuota: subscription.bonusQueryQuota + queries,
+          plan: plan,
+          dailyQueryLimit: planConfig?.dailyQueryLimit ?? 10,
+          monthlyQueryLimit: planConfig?.monthlyQueryLimit ?? 10,
+          billingType: 'ONE_TIME',
+          // NE dodajemo u bonusQueryQuota - korisnik dobiva plan s limitima
         },
       });
-      this.logger.log(`Dodano ${queries} bonus upita (plan ${plan}) za organizaciju ${organizationId}`);
+      this.logger.log(`Aktiviran ONE_TIME plan ${plan} za organizaciju ${organizationId} (limit: ${planConfig?.monthlyQueryLimit ?? 10})`);
     }
 
     this.logger.log(`One-time payment uspješno obrađen za organizaciju ${organizationId}`);
