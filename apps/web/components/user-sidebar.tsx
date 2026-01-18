@@ -25,6 +25,10 @@ import { NotificationBell } from './notification-bell';
 const APP_VERSION = 'v1.4.1';
 import { useState, useRef, useEffect } from 'react';
 
+interface UserSidebarProps {
+  onNavClick?: () => void;
+}
+
 // User menu items - organized by sections
 const userNavItems = [
   {
@@ -52,11 +56,18 @@ const userNavItems = [
   }
 ];
 
-export function UserSidebar() {
+export function UserSidebar({ onNavClick }: UserSidebarProps = {}) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Handle navigation click (closes mobile menu)
+  const handleNavClick = () => {
+    if (onNavClick) {
+      onNavClick();
+    }
+  };
 
   // Close user menu when clicking outside
   useEffect(() => {
@@ -110,6 +121,7 @@ export function UserSidebar() {
                   <li key={item.href}>
                     <Link
                       href={item.href}
+                      onClick={handleNavClick}
                       className={`kpd-user-sidebar__link ${isActive ? 'kpd-user-sidebar__link--active' : ''} ${item.primary ? 'kpd-user-sidebar__link--primary' : ''}`}
                     >
                       <item.icon className="kpd-user-sidebar__link-icon" />
@@ -128,11 +140,11 @@ export function UserSidebar() {
         <div className="kpd-user-sidebar__version">
           <span className="kpd-user-sidebar__version-badge">{APP_VERSION}</span>
         </div>
-        <Link href="/" className="kpd-user-sidebar__info-link">
+        <Link href="/" onClick={handleNavClick} className="kpd-user-sidebar__info-link">
           <Home className="w-3.5 h-3.5" />
           Početna stranica
         </Link>
-        <Link href="/changelog" className="kpd-user-sidebar__info-link">
+        <Link href="/changelog" onClick={handleNavClick} className="kpd-user-sidebar__info-link">
           <FileText className="w-3.5 h-3.5" />
           Changelog
         </Link>
@@ -180,7 +192,10 @@ export function UserSidebar() {
           <div className="kpd-user-sidebar__dropdown">
             <Link
               href="/settings/profile"
-              onClick={() => setIsUserMenuOpen(false)}
+              onClick={() => {
+                setIsUserMenuOpen(false);
+                handleNavClick();
+              }}
               className="kpd-user-sidebar__dropdown-item"
             >
               <Settings className="w-4 h-4" />

@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AdminSidebar } from './admin-sidebar';
 import { UserSidebar } from './user-sidebar';
 import { ImpersonationBanner } from './admin/impersonation-banner';
 import { useAuth } from '@/contexts/auth-context';
 import { useIsAdmin } from '@/lib/hooks/use-is-admin';
-import { Menu, X, User, ChevronDown, LogOut, Settings } from 'lucide-react';
+import { User, ChevronDown, LogOut, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { NotificationBell } from './notification-bell';
 import { LoginPopup } from './login-popup';
@@ -104,6 +104,31 @@ export function DashboardLayoutClient({ children }: DashboardLayoutProps) {
     );
   }
 
+  // Close mobile menu on escape key
+  const handleEscapeKey = useCallback((event: KeyboardEvent) => {
+    if (event.key === 'Escape' && isMobileMenuOpen) {
+      setIsMobileMenuOpen(false);
+    }
+  }, [isMobileMenuOpen]);
+
+  // Handle swipe-to-close on mobile
+  useEffect(() => {
+    document.addEventListener('keydown', handleEscapeKey);
+    return () => document.removeEventListener('keydown', handleEscapeKey);
+  }, [handleEscapeKey]);
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobileMenuOpen]);
+
   // REGULAR USER LAYOUT: Sidebar + Content
   return (
     <div className={`kpd-app-layout ${isImpersonating ? 'pt-12' : ''}`}>
@@ -118,30 +143,36 @@ export function DashboardLayoutClient({ children }: DashboardLayoutProps) {
         <UserSidebar />
       </div>
 
-      {/* Mobile header */}
-      <header className="kpd-app-layout__mobile-header">
+      {/* Mobile header - premium with blur */}
+      <header className={`kpd-app-layout__mobile-header ${isImpersonating ? 'top-12' : ''}`}>
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           className="kpd-app-layout__menu-button"
+          aria-label={isMobileMenuOpen ? 'Zatvori izbornik' : 'Otvori izbornik'}
+          aria-expanded={isMobileMenuOpen}
         >
-          {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          {/* Animated hamburger icon */}
+          <span className={`kpd-hamburger ${isMobileMenuOpen ? 'kpd-hamburger--open' : ''}`}>
+            <span className="kpd-hamburger__line kpd-hamburger__line--top"></span>
+            <span className="kpd-hamburger__line kpd-hamburger__line--middle"></span>
+            <span className="kpd-hamburger__line kpd-hamburger__line--bottom"></span>
+          </span>
         </button>
         <span className="kpd-app-layout__mobile-title">KPD Klasifikator</span>
         <NotificationBell />
       </header>
 
-      {/* Mobile sidebar overlay */}
-      {isMobileMenuOpen && (
-        <>
-          <div
-            className="kpd-app-layout__overlay"
-            onClick={() => setIsMobileMenuOpen(false)}
-          />
-          <div className="kpd-app-layout__mobile-sidebar">
-            <UserSidebar />
-          </div>
-        </>
-      )}
+      {/* Mobile sidebar overlay with backdrop blur */}
+      <div
+        className={`kpd-app-layout__overlay ${isMobileMenuOpen ? 'kpd-app-layout__overlay--visible' : ''}`}
+        onClick={() => setIsMobileMenuOpen(false)}
+        aria-hidden="true"
+      />
+
+      {/* Mobile sidebar with slide-in animation */}
+      <div className={`kpd-app-layout__mobile-sidebar ${isMobileMenuOpen ? 'kpd-app-layout__mobile-sidebar--open' : ''}`}>
+        <UserSidebar onNavClick={() => setIsMobileMenuOpen(false)} />
+      </div>
 
       {/* Main content area */}
       <main className="kpd-app-layout__main">

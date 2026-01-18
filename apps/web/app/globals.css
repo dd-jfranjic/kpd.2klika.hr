@@ -3504,7 +3504,7 @@ select:disabled {
   }
 }
 
-/* Mobile Header - Compact */
+/* Mobile Header - Premium with Blur */
 .kpd-app-layout__mobile-header {
   display: flex;
   align-items: center;
@@ -3515,8 +3515,10 @@ select:disabled {
   right: 0;
   height: 56px;
   padding: 0 var(--space-md);
-  background: var(--card);
-  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   z-index: 50;
 }
 
@@ -3526,22 +3528,28 @@ select:disabled {
   }
 }
 
+/* Menu button - 44px touch target */
 .kpd-app-layout__menu-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   background: transparent;
   border: none;
   border-radius: var(--radius-lg);
   color: var(--foreground);
   cursor: pointer;
   transition: background 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .kpd-app-layout__menu-button:hover {
   background: var(--muted);
+}
+
+.kpd-app-layout__menu-button:active {
+  background: var(--primary-100);
 }
 
 .kpd-app-layout__mobile-title {
@@ -3549,30 +3557,113 @@ select:disabled {
   font-size: 1rem;
   font-weight: 600;
   color: var(--foreground);
+  letter-spacing: -0.01em;
 }
 
-/* Mobile Sidebar Overlay */
+/* Animated Hamburger Icon */
+.kpd-hamburger {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 24px;
+  height: 24px;
+  position: relative;
+}
+
+.kpd-hamburger__line {
+  position: absolute;
+  display: block;
+  width: 20px;
+  height: 2px;
+  background-color: var(--foreground);
+  border-radius: 1px;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.2s ease,
+              top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.kpd-hamburger__line--top {
+  top: 6px;
+}
+
+.kpd-hamburger__line--middle {
+  top: 11px;
+}
+
+.kpd-hamburger__line--bottom {
+  top: 16px;
+}
+
+/* Hamburger → X Animation */
+.kpd-hamburger--open .kpd-hamburger__line--top {
+  top: 11px;
+  transform: rotate(45deg);
+}
+
+.kpd-hamburger--open .kpd-hamburger__line--middle {
+  opacity: 0;
+  transform: scaleX(0);
+}
+
+.kpd-hamburger--open .kpd-hamburger__line--bottom {
+  top: 11px;
+  transform: rotate(-45deg);
+}
+
+/* Mobile Sidebar Overlay - Always rendered, controlled by visibility */
 .kpd-app-layout__overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   z-index: 45;
-  animation: kpd-fade-in 0.2s ease-out;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease-out, visibility 0.25s ease-out;
 }
 
-@keyframes kpd-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.kpd-app-layout__overlay--visible {
+  opacity: 1;
+  visibility: visible;
 }
 
+@media (min-width: 1024px) {
+  .kpd-app-layout__overlay {
+    display: none;
+  }
+}
+
+/* Mobile Sidebar - Smooth slide animation */
 .kpd-app-layout__mobile-sidebar {
   position: fixed;
   left: 0;
   top: 0;
   bottom: 0;
-  width: 240px;
+  width: 280px;
+  max-width: 85vw;
   z-index: 50;
-  animation: kpd-slide-in 0.2s ease-out;
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+  box-shadow: var(--shadow-2xl);
+}
+
+.kpd-app-layout__mobile-sidebar--open {
+  transform: translateX(0);
+}
+
+@media (min-width: 1024px) {
+  .kpd-app-layout__mobile-sidebar {
+    display: none;
+  }
+}
+
+/* Keyframe animations - keep for other uses */
+@keyframes kpd-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes kpd-slide-in {
@@ -3714,13 +3805,24 @@ select:disabled {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: 0.5rem var(--space-sm);
+  padding: var(--space-md) var(--space-md);
+  min-height: 44px; /* Touch target minimum for mobile */
   border-radius: var(--radius-md);
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--muted-foreground);
   text-decoration: none;
   transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Compact links on larger screens */
+@media (min-width: 1024px) {
+  .kpd-user-sidebar__link {
+    padding: 0.5rem var(--space-sm);
+    min-height: auto;
+    font-size: 0.8125rem;
+  }
 }
 
 .kpd-user-sidebar__link:hover {
@@ -4453,4 +4555,123 @@ select:disabled {
 
 .kpd-mobile-menu__legal span {
   color: var(--muted-foreground);
+}
+
+/* ============================================
+   MOBILE OPTIMIZATION UTILITIES
+   ============================================ */
+
+/* Touch-friendly buttons (44px minimum) */
+.kpd-btn-touch {
+  min-height: 44px;
+  min-width: 44px;
+  padding: var(--space-sm) var(--space-md);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Responsive table container with horizontal scroll */
+.kpd-table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-200) transparent;
+}
+
+.kpd-table-responsive::-webkit-scrollbar {
+  height: 6px;
+}
+
+.kpd-table-responsive::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.kpd-table-responsive::-webkit-scrollbar-thumb {
+  background: var(--primary-200);
+  border-radius: 3px;
+}
+
+/* Mobile-first responsive padding */
+.kpd-card-mobile {
+  padding: var(--space-md);
+}
+
+@media (min-width: 640px) {
+  .kpd-card-mobile {
+    padding: var(--space-lg);
+  }
+}
+
+@media (min-width: 1024px) {
+  .kpd-card-mobile {
+    padding: var(--space-xl);
+  }
+}
+
+/* Hide on mobile, show on desktop */
+.kpd-hide-mobile {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .kpd-hide-mobile {
+    display: initial;
+  }
+}
+
+/* Show on mobile, hide on desktop */
+.kpd-show-mobile {
+  display: initial;
+}
+
+@media (min-width: 640px) {
+  .kpd-show-mobile {
+    display: none;
+  }
+}
+
+/* Mobile-optimized text truncation */
+.kpd-truncate-mobile {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+@media (min-width: 640px) {
+  .kpd-truncate-mobile {
+    white-space: normal;
+    max-width: none;
+  }
+}
+
+/* Responsive grid for stats (2 columns on mobile) */
+.kpd-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-md);
+}
+
+@media (min-width: 640px) {
+  .kpd-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-lg);
+  }
+}
+
+@media (min-width: 1024px) {
+  .kpd-stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Safe area padding for notched devices */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .kpd-app-layout__mobile-sidebar {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .kpd-app-layout__mobile-header {
+    padding-left: max(var(--space-md), env(safe-area-inset-left));
+    padding-right: max(var(--space-md), env(safe-area-inset-right));
+  }
 }

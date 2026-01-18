@@ -21,7 +21,7 @@ export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 320 });
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -41,15 +41,40 @@ export function NotificationBell() {
     }
   }, [isOpen, token]);
 
-  // Calculate dropdown position when opening
+  // Calculate dropdown position when opening or resizing
   useEffect(() => {
-    if (isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setDropdownPosition({
-        top: rect.bottom + 8,
-        left: rect.left,
-      });
-    }
+    const calculatePosition = () => {
+      if (isOpen && buttonRef.current) {
+        const rect = buttonRef.current.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const dropdownWidth = Math.min(320, viewportWidth - 24); // Max 320px or viewport - 24px margin
+
+        // Position from right edge on mobile, or align with button on desktop
+        let left = rect.right - dropdownWidth;
+
+        // Ensure it doesn't go off the left edge
+        if (left < 12) {
+          left = 12;
+        }
+
+        // Ensure it doesn't go off the right edge
+        if (left + dropdownWidth > viewportWidth - 12) {
+          left = viewportWidth - dropdownWidth - 12;
+        }
+
+        setDropdownPosition({
+          top: rect.bottom + 8,
+          left: left,
+          width: dropdownWidth,
+        });
+      }
+    };
+
+    calculatePosition();
+
+    // Recalculate on resize (orientation change, window resize)
+    window.addEventListener('resize', calculatePosition);
+    return () => window.removeEventListener('resize', calculatePosition);
   }, [isOpen]);
 
   // Close dropdown when clicking outside
@@ -154,12 +179,12 @@ export function NotificationBell() {
   const getNotificationIcon = (notification: Notification) => {
     const type = notification.metadata?.type as string | undefined;
     if (type === 'GIFT_QUERIES') {
-      return <Gift className="w-5 h-5 text-green-500" />;
+      return <Gift className="w-4 h-4 text-green-600" />;
     }
     if (type === 'SUPPORT_MESSAGE') {
-      return <MessageSquare className="w-5 h-5 text-blue-500" />;
+      return <MessageSquare className="w-4 h-4 text-blue-600" />;
     }
-    return <Info className="w-5 h-5 text-gray-400" />;
+    return <Info className="w-4 h-4 text-gray-500" />;
   };
 
   return (
@@ -203,10 +228,12 @@ export function NotificationBell() {
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="fixed w-80 bg-white rounded-xl shadow-2xl border z-[9999] overflow-hidden"
+          className="fixed bg-white rounded-xl shadow-2xl border z-[9999] overflow-hidden"
           style={{
             top: dropdownPosition.top,
             left: dropdownPosition.left,
+            width: dropdownPosition.width,
+            maxHeight: 'calc(100vh - 100px)',
           }}
         >
           {/* Header */}
@@ -235,34 +262,34 @@ export function NotificationBell() {
                 <p className="text-sm">Nemate obavijesti</p>
               </div>
             ) : (
-              <div className="divide-y">
+              <div className="divide-y divide-gray-100">
                 {notifications.map((notification) => (
                   <div
                     key={notification.id}
-                    className={`px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer ${
+                    className={`px-4 py-4 hover:bg-gray-50 transition-colors cursor-pointer ${
                       !notification.readAt ? 'bg-blue-50/50' : ''
                     }`}
                     onClick={() => !notification.readAt && markAsRead(notification.id)}
                   >
-                    <div className="flex gap-3">
-                      <div className="flex-shrink-0 mt-0.5">
+                    <div className="flex gap-3 items-start">
+                      <div className="flex-shrink-0 mt-0.5 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
                         {getNotificationIcon(notification)}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm ${!notification.readAt ? 'font-semibold' : 'font-medium'} text-gray-900`}>
+                      <div className="flex-1 min-w-0 overflow-hidden">
+                        <p className={`text-sm leading-snug ${!notification.readAt ? 'font-semibold' : 'font-medium'} text-gray-900 break-words`}>
                           {notification.title}
                         </p>
                         {notification.body && (
-                          <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                          <p className="text-sm text-gray-600 mt-1 leading-relaxed break-words">
                             {notification.body}
                           </p>
                         )}
-                        <p className="text-xs text-gray-400 mt-1">
+                        <p className="text-xs text-gray-400 mt-2">
                           {formatDate(notification.createdAt)}
                         </p>
                       </div>
                       {!notification.readAt && (
-                        <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-2"></div>
+                        <div className="w-2.5 h-2.5 bg-blue-500 rounded-full flex-shrink-0 mt-1.5"></div>
                       )}
                     </div>
                   </div>

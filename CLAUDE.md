@@ -8,6 +8,19 @@
 
 ---
 
+## 🎯 RULE #0: UNDERSTAND THE APP FIRST
+
+Before starting any work on this project:
+
+> **Take a look at the app and architecture. Understand deeply how it works inside and out. Ask me any questions if there are any things you don't understand. This will be the basis for the rest of the internship.**
+
+- Explore the codebase structure
+- Understand the data models and relationships (Prisma schema)
+- Review existing components and patterns
+- Ask clarifying questions before implementing
+
+---
+
 ## 🗄️ DATABASE SAFETY - KRITIČNO!
 
 **⚠️ OVO PRAVILO IMA NAJVIŠI PRIORITET - ČITAJ SVAKU SESIJU!**
@@ -268,6 +281,29 @@ kpd.2klika.hr → Apache → BLUE (active) ili GREEN (standby)
 | **BLUE** | 13620 | 13621 | `docker/docker-compose.prod.yml` |
 | **GREEN** | 13630 | 13631 | `docker/docker-compose.green.yml` |
 
+### Network Izolacija
+
+**Mreža**: `kpd-internal` (izolirana bridge mreža)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│               kpd-internal (IZOLIRANA)                  │
+├─────────────────────────────────────────────────────────┤
+│  kpd-postgres     → PostgreSQL 16                       │
+│  kpd-redis        → Redis 7.x                           │
+│  kpd-pgbouncer    → PgBouncer connection pooling        │
+│  kpd-web          → Next.js frontend                    │
+│  kpd-api          → NestJS backend                      │
+└─────────────────────────────────────────────────────────┘
+
+❌ NE koristi: httpdocs_default (dijeli se s drugim projektima!)
+```
+
+**Zašto izolacija:**
+- Svaki projekt ima vlastitu mrežu - nema konflikata
+- `docker-compose down` na jednom projektu NE utječe na druge
+- Veća sigurnost - containeri ne vide druge projekte
+
 ### ⚠️ VAŽNO: Apache Routing za Next.js API
 
 **Problem**: Apache routing šalje SVE `/api/` zahtjeve na NestJS backend, ali `/api/kpd/search` je Next.js API ruta koja proxira na backend s extended timeout-om (120s za Gemini RAG).
@@ -493,6 +529,6 @@ python3 gemini_rag.py list-stores
 
 ---
 
-**Last Updated**: 2025-12-17
-**Version**: 2.3 (Apache routing za Next.js API dokumentirano)
+**Last Updated**: 2026-01-07
+**Version**: 2.4 (Network Izolacija dokumentirana)
 **Maintained by**: Claude Code
