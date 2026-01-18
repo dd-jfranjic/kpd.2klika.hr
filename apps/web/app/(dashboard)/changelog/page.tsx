@@ -6,6 +6,37 @@ import { FileText, Calendar, Sparkles, Bug, Wrench, Zap } from 'lucide-react';
 // Changelog entries - add new entries at the top
 const changelogEntries = [
   {
+    version: 'v1.5.0',
+    date: '2026-01-18',
+    title: 'Mobilna optimizacija',
+    changes: [
+      {
+        type: 'feature',
+        description: 'Premium mobilni izbornik - animirani hamburger meni s elegantnom transformacijom u X ikonu',
+      },
+      {
+        type: 'feature',
+        description: 'Backdrop blur efekt - moderna prozirna navigacija s blur efektom na mobilnim uređajima',
+      },
+      {
+        type: 'improvement',
+        description: 'Touch-friendly sučelje - svi interaktivni elementi sada imaju minimalno 44px za lakše korištenje na dodirnim ekranima',
+      },
+      {
+        type: 'improvement',
+        description: 'Responzivni prikaz notifikacija - panel s obavijestima se automatski prilagođava veličini ekrana',
+      },
+      {
+        type: 'improvement',
+        description: 'Optimizirane kartice - responzivni razmaci koji se prilagođavaju mobilnim, tablet i desktop uređajima',
+      },
+      {
+        type: 'fix',
+        description: 'Ispravljen scroll na mobilnim uređajima kada je izbornik otvoren',
+      },
+    ],
+  },
+  {
     version: 'v1.4.1',
     date: '2025-12-30',
     title: 'Poboljšanja notifikacija',
