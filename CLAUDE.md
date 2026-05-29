@@ -1,5 +1,7 @@
 # CLAUDE.md - KPD 2klika
 
+> Zlatna pravila (Sloj 1) u ~/.claude/CLAUDE.md (symlink) — učitavaju se uvijek. Ovo = samo kpd-specifično.
+
 **Domain**: kpd.2klika.hr
 **Path**: `/var/www/vhosts/kpd.2klika.hr/httpdocs/`
 **System User**: `kpd.2klika.hr_cjfmg3wnf4u`
@@ -8,185 +10,132 @@
 
 ---
 
-## 🎯 RULE #0: UNDERSTAND THE APP FIRST
+## Next.js 16 Docs Index
 
-Before starting any work on this project:
+> **Docs location**: `apps/web/.next-docs/` — Next.js 16 ima BREAKING CHANGES. UVIJEK čitaj docs.
 
-> **Take a look at the app and architecture. Understand deeply how it works inside and out. Ask me any questions if there are any things you don't understand. This will be the basis for the rest of the internship.**
-
-- Explore the codebase structure
-- Understand the data models and relationships (Prisma schema)
-- Review existing components and patterns
-- Ask clarifying questions before implementing
+<!-- NEXT-DOCS-START -->[Next.js 16.0.10 Docs]|root:apps/web/.next-docs|STOP: Your Next.js knowledge may be outdated. Next.js 16 has BREAKING CHANGES. ALWAYS read docs before implementing.|01-app/01-getting-started:{01-installation.mdx,02-project-structure.mdx,03-layouts-and-pages.mdx,04-linking-and-navigating.mdx,05-server-and-client-components.mdx,06-partial-prerendering.mdx,07-fetching-data.mdx,08-updating-data.mdx,09-caching-and-revalidating.mdx}|01-app/02-guides:{authentication.mdx,caching.mdx,environment-variables.mdx,forms.mdx,incremental-static-regeneration.mdx,internationalization.mdx,multi-tenant.mdx,production-checklist.mdx}|01-app/03-api-reference/01-directives:{use-cache.mdx,use-client.mdx,use-server.mdx}|01-app/03-api-reference/02-components:{font.mdx,form.mdx,image.mdx,link.mdx,script.mdx}|01-app/03-api-reference/03-file-conventions:{error.mdx,forbidden.mdx,layout.mdx,loading.mdx,middleware.mdx,not-found.mdx,page.mdx,route.mdx,unauthorized.mdx}|01-app/03-api-reference/04-functions:{after.mdx,cacheLife.mdx,cacheTag.mdx,connection.mdx,cookies.mdx,headers.mdx,redirect.mdx,revalidatePath.mdx,revalidateTag.mdx,use-router.mdx,use-search-params.mdx}<!-- NEXT-DOCS-END -->
 
 ---
 
-## 🗄️ DATABASE SAFETY - KRITIČNO!
-
-**⚠️ OVO PRAVILO IMA NAJVIŠI PRIORITET - ČITAJ SVAKU SESIJU!**
-
-### APSOLUTNO ZABRANJENO:
-- ❌ **NIKADA ne briši podatke** iz baze bez eksplicitne dozvole korisnika
-- ❌ **NIKADA ne pokreći `docker-compose down -v`** (briše volumene s podacima!)
-- ❌ **NIKADA ne pokreći `docker volume rm`** bez prethodne provjere sadržaja
-- ❌ **NIKADA ne pokreći `prisma migrate reset`** u produkciji
-- ❌ **NIKADA ne koristi `--force-reset` flagove** koji mogu obrisati podatke
-
-### PRIJE bilo kakve operacije koja MOŽE utjecati na bazu:
-1. **PROVJERI** postoji li backup (`backups/` folder)
-2. **NAPRAVI BACKUP** ako ne postoji:
-   ```bash
-   docker exec kpd_postgres pg_dump -U kpd_user kpd_db > backups/backup_$(date +%Y%m%d_%H%M%S).sql
-   ```
-3. **PITAJ KORISNIKA** za potvrdu prije destruktivnih operacija
-
-### DESTRUKTIVNE OPERACIJE (zahtijevaju backup + potvrdu):
-- `docker-compose down` (može utjecati na volumene)
-- `docker volume prune/rm`
-- `prisma db push --force-reset`
-- `prisma migrate reset`
-- `DROP TABLE/DATABASE` SQL naredbe
-- Bilo kakva migracija koja briše stupce/tablice
-
-### SIGURNE OPERACIJE (ne zahtijevaju posebnu potvrdu):
-- `docker-compose restart`
-- `prisma db push` (dodaje nove tablice/stupce, NE briše)
-- `prisma generate`
-- SELECT upiti
-
----
-
-## PROJEKTNA DOKUMENTACIJA
-
-### Glavni Dokumenti (OBAVEZNO CITAJ!)
+## Projektna Dokumentacija
 
 | Dokument | Svrha | Prioritet |
 |----------|-------|-----------|
-| **[MASTER_PLAN.md](./MASTER_PLAN.md)** | Index svih faza, arhitektura, subscription paketi | #1 |
-| **[AS_IMPLEMENTED.md](./AS_IMPLEMENTED.md)** | Progress tracking - sto je napravljeno, status | #2 |
-| **[docs/DATABASE_SCHEMA.md](./docs/DATABASE_SCHEMA.md)** | Kompletna Prisma schema s seed podacima | #3 |
-| **[docs/DESIGN_RULES.md](./docs/DESIGN_RULES.md)** | UI/UX pravila, boje, NO INLINE CSS! | #4 |
+| **MASTER_PLAN.md** | Index faza, arhitektura, subscription paketi | #1 |
+| **AS_IMPLEMENTED.md** | Progress — što je napravljeno | #2 |
+| **docs/DATABASE_SCHEMA.md** | Prisma schema + seed | #3 |
+| **docs/DESIGN_RULES.md** | UI/UX pravila, NO INLINE CSS! | #4 |
 
-### Faze Razvoja
+### Faze
 
-| Faza | Dokument | Status |
-|------|----------|--------|
-| 0 | [docs/PHASE_0_PREPARATION.md](./docs/PHASE_0_PREPARATION.md) | **ZAVRSENO** |
-| 1 | [docs/PHASE_1_FRESH_START.md](./docs/PHASE_1_FRESH_START.md) | **ZAVRSENO** |
-| 2 | [docs/PHASE_2_AUTH.md](./docs/PHASE_2_AUTH.md) | **ZAVRSENO** |
-| 3 | [docs/PHASE_3_BILLING.md](./docs/PHASE_3_BILLING.md) | **ZAVRSENO** |
-| 4 | [docs/PHASE_4_KPD_TOOL.md](./docs/PHASE_4_KPD_TOOL.md) | **ZAVRSENO** |
-| 5 | [docs/PHASE_5_DASHBOARD.md](./docs/PHASE_5_DASHBOARD.md) | **ZAVRSENO** |
-| 6 | [docs/PHASE_6_ADMIN.md](./docs/PHASE_6_ADMIN.md) | **ZAVRSENO** |
-| 7 | [docs/PHASE_7_POLISH.md](./docs/PHASE_7_POLISH.md) | **U TIJEKU** (~80%) |
+| Faza | Status |
+|------|--------|
+| 0-6 | **ZAVRŠENO** |
+| 7 Polish | **U TIJEKU** (~80%) |
+
+Detalji: `docs/PHASE_[0-7]_*.md`
 
 ---
 
-## TECH STACK S DOKUMENTACIJOM
+## Tech Stack
 
-### Frontend
-
-| Tehnologija | Verzija | Dokumentacija |
-|-------------|---------|---------------|
-| **Next.js** | 15.x | https://nextjs.org/docs |
-| **React** | 19.x | https://react.dev/reference/react |
-| **TypeScript** | 5.x | https://www.typescriptlang.org/docs/ |
-| **Tailwind CSS** | 4.x | https://tailwindcss.com/docs |
-| **shadcn/ui** | latest | https://ui.shadcn.com/docs |
-| **React Hook Form** | 7.x | https://react-hook-form.com/docs |
-| **Zod** | 3.x | https://zod.dev/ |
-
-### Backend
-
-| Tehnologija | Verzija | Dokumentacija |
-|-------------|---------|---------------|
-| **NestJS** | 11.x | https://docs.nestjs.com/ |
-| **Prisma** | 6.x | https://www.prisma.io/docs |
-| **PostgreSQL** | 17.x | https://www.postgresql.org/docs/17/ |
-| **Redis** | 7.x | https://redis.io/docs/ |
-| **Passport JWT** | latest | http://www.passportjs.org/packages/passport-jwt/ |
-| **bcrypt** | latest | https://www.npmjs.com/package/bcrypt |
-
-### Payments
-
-| Tehnologija | Dokumentacija |
-|-------------|---------------|
-| **Stripe Billing** | https://docs.stripe.com/billing |
-| **Stripe Subscriptions** | https://docs.stripe.com/billing/subscriptions/build-subscriptions |
-| **Stripe Webhooks** | https://docs.stripe.com/webhooks |
-| **Stripe Customer Portal** | https://docs.stripe.com/customer-management/integrate-customer-portal |
-
-### AI/RAG
-
-| Tehnologija | Dokumentacija |
-|-------------|---------------|
-| **Google Gemini API** | https://ai.google.dev/gemini-api/docs |
-| **Gemini File Search (RAG)** | https://ai.google.dev/gemini-api/docs/file-search |
-| **@google/genai SDK** | https://www.npmjs.com/package/@google/genai |
-| **Gemini Models** | https://ai.google.dev/gemini-api/docs/models |
-
-### Email
-
-| Tehnologija | Dokumentacija |
-|-------------|---------------|
-| **Nodemailer** | https://nodemailer.com/about/ |
-| **React Email** | https://react.email/docs/introduction |
-
-### Deployment
-
-| Tehnologija | Dokumentacija |
-|-------------|---------------|
-| **Docker** | https://docs.docker.com/ |
-| **Docker Compose** | https://docs.docker.com/compose/ |
-| **Nginx** | https://nginx.org/en/docs/ |
+**Frontend**: Next.js 15, React 19, TypeScript 5, Tailwind 4, shadcn/ui, React Hook Form + Zod
+**Backend**: NestJS 11, Prisma 6, PostgreSQL 17, Redis 7, Passport JWT
+**Payments**: Stripe Billing (subscriptions, webhooks, customer portal)
+**AI**: Gemini 2.5 Flash (RAG) + File Search API
+**Email**: Nodemailer + React Email
 
 ---
 
-## KPD REFERENTNA IMPLEMENTACIJA (FiskalAI)
+## KPD Referentna Implementacija (FiskalAI)
 
-**KRITICNO**: KPD alat kopirati iz FiskalAI projekta!
+**Backend**: `/var/www/vhosts/fiskalai.2klika.hr/httpdocs/backend/src/modules/{kpd/,ai/}`
+**Frontend**: `/var/www/vhosts/fiskalai.2klika.hr/httpdocs/frontend/app/tools/kpd-lookup/`
+**KPD Podaci**: `/var/www/vhosts/fiskalai.2klika.hr/httpdocs/kpd-popis/` (5,701 kodova, KPD2025_NOVO.txt)
+**Sync workflow**: `KpdSyncLog` model, `KpdSyncService`, admin `/admin/kpd-sync/`
 
-### Lokacija FiskalAI KPD Komponenti
+---
 
-**Backend** (`/var/www/vhosts/fiskalai.2klika.hr/httpdocs/backend/src/modules/`):
+## Zlatna Pravila
+
+1. **ZERO HARDCODING** — SVE konfiguracije u bazu (`SystemConfig`, `PlanConfig`). Jedini izuzetak: `.env`
+2. **NO INLINE CSS** — Koristi className, NIKAD style={{}}
+3. **Zod validacija** za SVE inpute, rate limiting na SVE endpoints
+4. **Docker cleanup** nakon SVAKOG builda: `docker image prune -f && docker builder prune -f`
+
+---
+
+## Subscription Paketi
+
+| Plan | DisplayName | Cijena/mj | Upiti/mj | Članovi |
+|------|-------------|-----------|----------|---------|
+| FREE | KPD Starter | 0€ | 3 | 1 |
+| PLUS | KPD Plus | 6.99€ | 10 | 2 |
+| PRO | KPD Pro | 11.99€ | 20 | 5 |
+| BUSINESS | KPD Business | 30.99€ | 50 | 10 |
+| ENTERPRISE | KPD Enterprise | 199€ | 2500 | Unlimited |
+
+**Stripe Price IDs**: PLUS `price_1SeIevKFcGpdxTuIQF3ZyDFQ`, PRO `price_1SeIevKFcGpdxTuI2FmI1GFs`, BUSINESS `price_1SeIewKFcGpdxTuInfJyipWm`, ENTERPRISE `price_1SeIewKFcGpdxTuIQNscv0j9`
+
+---
+
+## Blue-Green Deployment
+
+| Environment | Web Port | API Port | Compose File |
+|-------------|----------|----------|--------------|
+| BLUE | 13620 | 13621 | `docker/docker-compose.prod.yml` |
+| GREEN | 13630 | 13631 | `docker/docker-compose.green.yml` |
+
+**Network**: `kpd-internal` (izolirana)
+
+### Deploy
+
+```bash
+cd /var/www/vhosts/kpd.2klika.hr/httpdocs
+./deploy/deploy.sh         # Auto: detektira aktivan, builda standby, cleanup, fix permissions
+./deploy/switch.sh status  # Provjeri
+./deploy/rollback.sh       # 1-sekunda rollback
 ```
-kpd/
-├── kpd.controller.ts         # JWT-protected API endpoints
-├── kpd-public.controller.ts  # PIN-protected public API
-├── kpd.service.ts            # Business logic (735 redaka)
-├── kpd.module.ts             # NestJS module
-└── guards/tool-pin.guard.ts  # PIN autentifikacija
 
-ai/
-├── kpd-suggestion.controller.ts    # AI prijedlozi endpoint
-├── services/
-│   ├── kpd-suggestion.service.ts   # Gemini RAG queries (289 redaka)
-│   ├── rag.service.ts              # FileSearchStore management (406 redaka)
-│   └── ai-settings.service.ts      # AI konfiguracija (317 redaka)
-└── dto/kpd-suggestion.dto.ts       # DTO validacija
+### Apache Routing — VAŽNO!
+`/api/kpd/` ide na Next.js (extended timeout 120s za Gemini RAG), ostali `/api/` na NestJS.
+Ako AI upiti vrate 404 → provjeri `vhost_ssl.conf` ima `/api/kpd/` PRIJE `/api/`.
+
+---
+
+## Quick Commands
+
+```bash
+cd /var/www/vhosts/kpd.2klika.hr/httpdocs
+
+docker compose -f docker/docker-compose.prod.yml ps
+docker logs kpd-web --tail 50
+docker logs kpd-api --tail 50
+
+# Health
+curl -s https://kpd.2klika.hr/api/health | jq
+
+# Permissions
+chown -R kpd.2klika.hr_cjfmg3wnf4u:psacln /var/www/vhosts/kpd.2klika.hr/httpdocs/
+chmod +x deploy/*.sh
 ```
 
-**Frontend** (`/var/www/vhosts/fiskalai.2klika.hr/httpdocs/frontend/`):
-```
-app/tools/kpd-lookup/
-├── page.tsx                        # PIN gate + tool
-├── layout.tsx                      # Metadata
-└── components/
-    ├── KpdLookupTool.tsx          # Glavni container
-    ├── PinGate.tsx                # PIN input (6-digit)
-    ├── AiSuggestionPanel.tsx      # AI suggestions UI
-    └── KpdBrowserPublic.tsx       # Tree browser
+---
 
-components/kpd/
-└── kpd-search.tsx                 # Reusable search (385 redaka)
+## Gemini RAG
 
-hooks/
-└── use-kpd-ai-suggestions.ts      # AI hook (124 redaka)
+```bash
+cd /root/tools/gemini-rag
+python3 gemini_rag.py create-store kpd-codes --display-name "KPD 2025"
+python3 gemini_rag.py upload kpd-codes "/path/to/kpd.pdf"
+python3 gemini_rag.py query kpd-codes "programiranje softvera" --verbose
+python3 gemini_rag.py list-stores
 ```
 
-### KPD Podaci (RAW FILES)
+**RAG Store**: `fileSearchStores/kpd-2025-klasifikacija-6g9v4clu15pc`
 
-**Lokacija**: `/var/www/vhosts/fiskalai.2klika.hr/httpdocs/kpd-popis/`
+### KPD Podaci (RAW FILES u FiskalAI)
 
 | Datoteka | Velicina | Format |
 |----------|----------|--------|
@@ -197,338 +146,18 @@ hooks/
 | `kpd_2025_hierarchy.json` | 1.1 MB | JSON hijerarhija |
 | `kpd_scraper_final.py` | 9.6 KB | Parser script |
 
-### KPD Sync Workflow
-
-**VAZNO**: Kada dodes do KPD importa/sync dijela, JAVI KORISNIKU!
-
-KPD kodovi se periodicno azuriraju od strane KLASUS-a. Sync workflow dokumentiran u FiskalAI:
-- `KpdSyncLog` model za audit trail
-- `KpdSyncService` za download, parse, diff, apply
-- Admin panel UI na `/admin/kpd-sync/`
-- Scheduled job za automatski sync
+Lokacija: `/var/www/vhosts/fiskalai.2klika.hr/httpdocs/kpd-popis/`
 
 ---
 
-## ZLATNA PRAVILA
-
-### 1. ZERO HARDCODING
-- **NIKADA** ne hardkodiraj vrijednosti u kod
-- **SVE** konfiguracije idu u bazu (`SystemConfig`, `PlanConfig`)
-- API kljucevi, limiti, poruke, cijene - SVE U BAZI
-- Jedini izuzetak: `.env` za Docker secrets
-
-### 2. NO INLINE CSS
-```tsx
-// ZABRANJENO:
-<div style={{ color: 'green' }}>
-
-// ISPRAVNO:
-<div className={styles.container}>
-```
-
-### 3. SIGURNOST
-- Zod validacija za SVE inpute
-- Rate limiting na SVE API endpoints
-- Encrypted secrets (AES-256-GCM)
-- OWASP Top 10 compliance
-
-### 4. DOCKER CLEANUP OBAVEZAN
-Nakon SVAKOG `docker compose up -d --build`:
-```bash
-docker image prune -f
-docker builder prune -f
-docker system df  # Verificiraj
-```
-
----
-
-## QUICK COMMANDS
-
-```bash
-cd /var/www/vhosts/kpd.2klika.hr/httpdocs
-
-# Status
-docker compose -f docker/docker-compose.prod.yml ps
-
-# Logs
-docker logs kpd-web --tail 50
-docker logs kpd-api --tail 50
-
-# Rebuild
-docker compose -f docker/docker-compose.prod.yml up -d --build
-
-# Cleanup (OBAVEZNO!)
-docker image prune -f && docker builder prune -f
-```
-
----
-
-## 🚀 ZERO-DOWNTIME DEPLOYMENT (Blue-Green)
-
-**KRITIČNO**: Slijedi ovu proceduru za SVAKI deployment!
-**Detaljno**: [docs/DEPLOYMENT_PROCEDURE.md](./docs/DEPLOYMENT_PROCEDURE.md)
-
-### Arhitektura
-
-```
-kpd.2klika.hr → Apache → BLUE (active) ili GREEN (standby)
-                              ↓
-                    Shared: PostgreSQL, Redis, PgBouncer
-```
-
-| Environment | Web Port | API Port | Compose File |
-|-------------|----------|----------|--------------|
-| **BLUE** | 13620 | 13621 | `docker/docker-compose.prod.yml` |
-| **GREEN** | 13630 | 13631 | `docker/docker-compose.green.yml` |
-
-### Network Izolacija
-
-**Mreža**: `kpd-internal` (izolirana bridge mreža)
-
-```
-┌─────────────────────────────────────────────────────────┐
-│               kpd-internal (IZOLIRANA)                  │
-├─────────────────────────────────────────────────────────┤
-│  kpd-postgres     → PostgreSQL 16                       │
-│  kpd-redis        → Redis 7.x                           │
-│  kpd-pgbouncer    → PgBouncer connection pooling        │
-│  kpd-web          → Next.js frontend                    │
-│  kpd-api          → NestJS backend                      │
-└─────────────────────────────────────────────────────────┘
-
-❌ NE koristi: httpdocs_default (dijeli se s drugim projektima!)
-```
-
-**Zašto izolacija:**
-- Svaki projekt ima vlastitu mrežu - nema konflikata
-- `docker-compose down` na jednom projektu NE utječe na druge
-- Veća sigurnost - containeri ne vide druge projekte
-
-### ⚠️ VAŽNO: Apache Routing za Next.js API
-
-**Problem**: Apache routing šalje SVE `/api/` zahtjeve na NestJS backend, ali `/api/kpd/search` je Next.js API ruta koja proxira na backend s extended timeout-om (120s za Gemini RAG).
-
-**Rješenje**: `switch.sh` automatski generira Apache config s izuzetkom:
-```apache
-# Next.js API routes (must be BEFORE NestJS catch-all!)
-ProxyPass /api/kpd/ http://127.0.0.1:$web_port/api/kpd/
-ProxyPassReverse /api/kpd/ http://127.0.0.1:$web_port/api/kpd/
-
-# API routes go to NestJS backend
-ProxyPass /api/ http://127.0.0.1:$api_port/api/
-ProxyPassReverse /api/ http://127.0.0.1:$api_port/api/
-```
-
-**Ako AI upiti vrate 404**: Provjeri `/var/www/vhosts/system/kpd.2klika.hr/conf/vhost_ssl.conf` - mora imati `/api/kpd/` izuzetak PRIJE općeg `/api/` pravila!
-
-### WORKFLOW ZA BUG FIX / FEATURE
-
-**Kad korisnik kaže "Popravi X" ili "Dodaj Y", CLAUDE MORA:**
-
-#### 1. ANALIZA (prije kodiranja!)
-
-```
-□ Je li potrebna promjena baze (Prisma schema)?
-  → DA: Migracija MORA biti backward-compatible!
-        - Nova kolona? MORA biti nullable (?) ili @default()
-        - Brisanje? NIKAD dok stari kod radi!
-  → NE: Samo promjena koda - jednostavnije
-
-□ Koje datoteke treba mijenjati?
-□ Treba li novi API endpoint?
-□ Treba li UI promjena?
-```
-
-#### 2. IMPLEMENTACIJA
-
-```bash
-cd /var/www/vhosts/kpd.2klika.hr/httpdocs
-
-# Ako treba migracija:
-cd packages/database
-npx prisma migrate deploy
-cd ../..
-```
-
-#### 3. DEPLOY (jedna komanda!)
-
-```bash
-./deploy/deploy.sh
-```
-
-Skripta automatski:
-- ✅ Detektira aktivan environment (BLUE/GREEN)
-- ✅ Builda STANDBY dok ACTIVE još radi
-- ✅ Čeka health check
-- ✅ Docker cleanup (KRITIČNO!)
-- ✅ Fix permissions
-- ✅ Pita za switch
-
-#### 4. POST-DEPLOY CHECKLIST
-
-```bash
-# Provjeri zdravlje
-curl -s https://kpd.2klika.hr/api/health | jq
-
-# Provjeri logove (greške?)
-docker logs kpd-web --tail 50
-docker logs kpd-api --tail 50
-
-# Disk space (MORA biti <85%)
-df -h /
-```
-
-### ROLLBACK (1 sekunda!)
-
-```bash
-./deploy/rollback.sh
-```
-
-### Deploy Komande
-
-| Akcija | Komanda |
-|--------|---------|
-| **Deploy** (automatski) | `./deploy/deploy.sh` |
-| **Status** | `./deploy/switch.sh status` |
-| **Rollback** | `./deploy/rollback.sh` |
-| Switch BLUE | `./deploy/switch.sh blue` |
-| Switch GREEN | `./deploy/switch.sh green` |
-
-### ⚠️ OBAVEZNO NAKON SVAKOG DEPLOYA:
-
-```bash
-# 1. Docker cleanup
-docker image prune -f && docker builder prune -f
-
-# 2. Provjeri disk
-df -h /
-
-# 3. Fix permissions (ako treba)
-chown -R kpd.2klika.hr_cjfmg3wnf4u:psacln /var/www/vhosts/kpd.2klika.hr/httpdocs/
-chmod +x deploy/*.sh
-```
-
----
-
-## MCP TOOLS
-
-### Stripe MCP (`mcp__stripe-kpd__*`)
-
-Direktan pristup Stripe dashboardu:
-
-| Alat | Opis |
-|------|------|
-| `retrieve_balance` | Provjeri balance |
-| `list_customers` | Lista kupaca |
-| `create_customer` | Kreiraj kupca |
-| `list_products` | Lista produkata |
-| `create_product` | Kreiraj produkt |
-| `list_prices` | Lista cijena |
-| `create_price` | Kreiraj cijenu (recurring!) |
-| `list_subscriptions` | Lista pretplata |
-| `create_payment_link` | Kreiraj payment link |
-| `search_stripe_documentation` | Pretrazi Stripe docs |
-
-### shadcn/ui MCP
-
-```
-mcp__shadcn-ui__get_component      # Dohvati komponentu
-mcp__shadcn-ui__get_component_demo # Primjeri koristenja
-mcp__shadcn-ui__list_components    # Lista svih komponenti
-```
-
-### Browser Testing
-
-```
-mcp__chrome-devtools__*  # Chrome DevTools kontrola
-```
-
----
-
-## SUBSCRIPTION PAKETI (Azurirano 2025-12-14)
-
-| Plan | DisplayName | Cijena/mj | Upiti/mj | Clanovi |
-|------|-------------|-----------|----------|---------|
-| **FREE** | KPD Starter | 0 EUR | 3 | 1 |
-| **PLUS** | KPD Plus | 6.99 EUR | 10 | 2 |
-| **PRO** | KPD Pro | 11.99 EUR | 20 | 5 |
-| **BUSINESS** | KPD Business | 30.99 EUR | 50 | 10 |
-| **ENTERPRISE** | KPD Enterprise | 199 EUR | 2500 | Unlimited |
-
-**Stripe produkti**: Kreirani (test mode), recurring prices aktivne
-**Stripe Price IDs**:
-- PLUS: `price_1SeIevKFcGpdxTuIQF3ZyDFQ`
-- PRO: `price_1SeIevKFcGpdxTuI2FmI1GFs`
-- BUSINESS: `price_1SeIewKFcGpdxTuInfJyipWm`
-- ENTERPRISE: `price_1SeIewKFcGpdxTuIQNscv0j9`
-
----
-
-## FILE PERMISSIONS
-
-```bash
-# Fix ownership
-chown -R kpd.2klika.hr_cjfmg3wnf4u:psacln /var/www/vhosts/kpd.2klika.hr/httpdocs/
-
-# Fix permissions
-find /var/www/vhosts/kpd.2klika.hr/httpdocs/ -type d -exec chmod 755 {} \;
-find /var/www/vhosts/kpd.2klika.hr/httpdocs/ -type f -exec chmod 644 {} \;
-```
-
----
-
-## WORKFLOW
-
-### Svaki Task:
-
-1. **Procitaj MASTER_PLAN.md** za kontekst
-2. **Procitaj relevantnu PHASE_X.md** za detalje
-3. **Procitaj DESIGN_RULES.md** za UI/UX
-4. **Implementiraj** prema dokumentaciji
-5. **Testiraj** prije commita
-6. **Cleanup Docker** nakon rebuilda
-
-### Delegiraj Subagentima:
-
-- `@explorer` - Istrazivanje koda (Haiku)
-- `@planner` - Planiranje arhitekture (Sonnet)
-- `general-purpose` - Kompleksni taskovi
-
----
-
-## GEMINI RAG TOOL
-
-**Lokacija**: `/root/tools/gemini-rag/gemini_rag.py`
-
-```bash
-cd /root/tools/gemini-rag
-
-# Kreiraj store
-python3 gemini_rag.py create-store kpd-codes --display-name "KPD 2025"
-
-# Upload dokument
-python3 gemini_rag.py upload kpd-codes "/path/to/kpd.pdf"
-
-# Query
-python3 gemini_rag.py query kpd-codes "programiranje softvera" --verbose
-
-# Lista store-ova
-python3 gemini_rag.py list-stores
-```
-
----
-
-## NAPOMENE
-
-- Auth: JWT email/password (Clerk uklonjen 2025-12-13)
-- Stripe: Test mode aktivan, recurring prices kreirane
-- Gemini: RAG aktivan (`gemini-2.5-flash` + File Search)
-- RAG Store: `fileSearchStores/kpd-2025-klasifikacija-6g9v4clu15pc`
-- KPD Import: 5,701 kodova importirano (2025-12-13)
+## Napomene
+
+- Auth: JWT email/password (Clerk uklonjen)
+- Stripe: Test mode, recurring prices kreirane
+- KPD Import: 5,701 kodova
 - Usage: Mjesečni limiti, neuspješni upiti se NE broje
 
 ---
 
-**Last Updated**: 2026-01-07
-**Version**: 2.4 (Network Izolacija dokumentirana)
-**Maintained by**: Claude Code
+**Last Updated**: 2026-05-29
+**Version**: 3.1 (WISC slim — golden-rule + generic dups maknuti u Sloj 1)
